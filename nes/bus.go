@@ -23,4 +23,6 @@ func (bus *Bus) Read(addr uint16) uint8 {
 	if addr >= 0x0000 && addr <= 0xFFFF {
 		return bus.RAM[addr]
 	}
+
+	return 0x00
 }
