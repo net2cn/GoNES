@@ -1,8 +1,6 @@
 package nes
 
-import (
-	"strings"
-)
+import "fmt"
 
 const (
 	_ = iota
@@ -33,41 +31,22 @@ const (
 )
 
 var instructionModes = [256]byte{
-	6, 7, 6, 7, 11, 11, 11, 11, 6, 5, 4, 5, 1, 1, 1, 1,
-	10, 9, 6, 9, 12, 12, 12, 12, 6, 3, 6, 3, 2, 2, 2, 2,
-	1, 7, 6, 7, 11, 11, 11, 11, 6, 5, 4, 5, 1, 1, 1, 1,
-	10, 9, 6, 9, 12, 12, 12, 12, 6, 3, 6, 3, 2, 2, 2, 2,
-	6, 7, 6, 7, 11, 11, 11, 11, 6, 5, 4, 5, 1, 1, 1, 1,
-	10, 9, 6, 9, 12, 12, 12, 12, 6, 3, 6, 3, 2, 2, 2, 2,
-	6, 7, 6, 7, 11, 11, 11, 11, 6, 5, 4, 5, 8, 1, 1, 1,
-	10, 9, 6, 9, 12, 12, 12, 12, 6, 3, 6, 3, 2, 2, 2, 2,
-	5, 7, 5, 7, 11, 11, 11, 11, 6, 5, 6, 5, 1, 1, 1, 1,
-	10, 9, 6, 9, 12, 12, 13, 13, 6, 3, 6, 3, 2, 2, 3, 3,
-	5, 7, 5, 7, 11, 11, 11, 11, 6, 5, 6, 5, 1, 1, 1, 1,
-	10, 9, 6, 9, 12, 12, 13, 13, 6, 3, 6, 3, 2, 2, 3, 3,
-	5, 7, 5, 7, 11, 11, 11, 11, 6, 5, 6, 5, 1, 1, 1, 1,
-	10, 9, 6, 9, 12, 12, 12, 12, 6, 3, 6, 3, 2, 2, 2, 2,
-	5, 7, 5, 7, 11, 11, 11, 11, 6, 5, 6, 5, 1, 1, 1, 1,
-	10, 9, 6, 9, 12, 12, 12, 12, 6, 3, 6, 3, 2, 2, 2, 2,
-}
-
-var instructionSizes = [256]byte{
-	2, 2, 0, 0, 2, 2, 2, 0, 1, 2, 1, 0, 3, 3, 3, 0,
-	2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0,
-	3, 2, 0, 0, 2, 2, 2, 0, 1, 2, 1, 0, 3, 3, 3, 0,
-	2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0,
-	1, 2, 0, 0, 2, 2, 2, 0, 1, 2, 1, 0, 3, 3, 3, 0,
-	2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0,
-	1, 2, 0, 0, 2, 2, 2, 0, 1, 2, 1, 0, 3, 3, 3, 0,
-	2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0,
-	2, 2, 0, 0, 2, 2, 2, 0, 1, 0, 1, 0, 3, 3, 3, 0,
-	2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 0, 3, 0, 0,
-	2, 2, 2, 0, 2, 2, 2, 0, 1, 2, 1, 0, 3, 3, 3, 0,
-	2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0,
-	2, 2, 0, 0, 2, 2, 2, 0, 1, 2, 1, 0, 3, 3, 3, 0,
-	2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0,
-	2, 2, 0, 0, 2, 2, 2, 0, 1, 2, 1, 0, 3, 3, 3, 0,
-	2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0,
+	2, 11, 1, 1, 1, 3, 3, 1, 1, 2, 1, 1, 1, 7, 7, 1,
+	6, 12, 1, 1, 1, 4, 4, 1, 1, 9, 1, 1, 1, 8, 8, 1,
+	7, 11, 1, 1, 3, 3, 3, 1, 1, 2, 1, 1, 7, 7, 7, 1,
+	6, 12, 1, 1, 1, 4, 4, 1, 1, 9, 1, 1, 1, 8, 8, 1,
+	1, 11, 1, 1, 1, 3, 3, 1, 1, 2, 1, 1, 7, 7, 7, 1,
+	6, 12, 1, 1, 1, 4, 4, 1, 1, 9, 1, 1, 1, 8, 8, 1,
+	1, 11, 1, 1, 1, 3, 3, 1, 1, 2, 1, 1, 10, 7, 7, 1,
+	6, 12, 1, 1, 1, 4, 4, 1, 1, 9, 1, 1, 1, 8, 8, 1,
+	1, 11, 1, 1, 3, 3, 3, 1, 1, 1, 1, 1, 7, 7, 7, 1,
+	6, 12, 1, 1, 4, 4, 5, 1, 1, 9, 1, 1, 1, 8, 1, 1,
+	2, 11, 2, 1, 3, 3, 3, 1, 1, 2, 1, 1, 7, 7, 7, 1,
+	6, 12, 1, 1, 4, 4, 5, 1, 1, 9, 1, 1, 8, 8, 9, 1,
+	2, 11, 1, 1, 3, 3, 3, 1, 1, 2, 1, 1, 7, 7, 7, 1,
+	6, 12, 1, 1, 1, 4, 4, 1, 1, 9, 1, 1, 1, 8, 8, 1,
+	2, 11, 1, 1, 3, 3, 3, 1, 1, 2, 1, 1, 7, 7, 7, 1,
+	6, 12, 1, 1, 1, 4, 4, 1, 1, 9, 1, 1, 1, 8, 8, 1,
 }
 
 var instructionCycles = [256]byte{
@@ -89,58 +68,24 @@ var instructionCycles = [256]byte{
 	2, 5, 2, 8, 4, 4, 6, 6, 2, 4, 2, 7, 4, 4, 7, 7,
 }
 
-var instructionPageCycles = [256]byte{
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-	1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0,
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-	1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0,
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-	1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0,
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-	1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0,
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-	1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-	1, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1, 1, 1,
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-	1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0,
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-	1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0,
-}
-
+// "XXX" means illegal instructions.
 var instructionNames = [256]string{
-	"BRK", "ORA", "KIL", "SLO", "NOP", "ORA", "ASL", "SLO",
-	"PHP", "ORA", "ASL", "ANC", "NOP", "ORA", "ASL", "SLO",
-	"BPL", "ORA", "KIL", "SLO", "NOP", "ORA", "ASL", "SLO",
-	"CLC", "ORA", "NOP", "SLO", "NOP", "ORA", "ASL", "SLO",
-	"JSR", "AND", "KIL", "RLA", "BIT", "AND", "ROL", "RLA",
-	"PLP", "AND", "ROL", "ANC", "BIT", "AND", "ROL", "RLA",
-	"BMI", "AND", "KIL", "RLA", "NOP", "AND", "ROL", "RLA",
-	"SEC", "AND", "NOP", "RLA", "NOP", "AND", "ROL", "RLA",
-	"RTI", "EOR", "KIL", "SRE", "NOP", "EOR", "LSR", "SRE",
-	"PHA", "EOR", "LSR", "ALR", "JMP", "EOR", "LSR", "SRE",
-	"BVC", "EOR", "KIL", "SRE", "NOP", "EOR", "LSR", "SRE",
-	"CLI", "EOR", "NOP", "SRE", "NOP", "EOR", "LSR", "SRE",
-	"RTS", "ADC", "KIL", "RRA", "NOP", "ADC", "ROR", "RRA",
-	"PLA", "ADC", "ROR", "ARR", "JMP", "ADC", "ROR", "RRA",
-	"BVS", "ADC", "KIL", "RRA", "NOP", "ADC", "ROR", "RRA",
-	"SEI", "ADC", "NOP", "RRA", "NOP", "ADC", "ROR", "RRA",
-	"NOP", "STA", "NOP", "SAX", "STY", "STA", "STX", "SAX",
-	"DEY", "NOP", "TXA", "XAA", "STY", "STA", "STX", "SAX",
-	"BCC", "STA", "KIL", "AHX", "STY", "STA", "STX", "SAX",
-	"TYA", "STA", "TXS", "TAS", "SHY", "STA", "SHX", "AHX",
-	"LDY", "LDA", "LDX", "LAX", "LDY", "LDA", "LDX", "LAX",
-	"TAY", "LDA", "TAX", "LAX", "LDY", "LDA", "LDX", "LAX",
-	"BCS", "LDA", "KIL", "LAX", "LDY", "LDA", "LDX", "LAX",
-	"CLV", "LDA", "TSX", "LAS", "LDY", "LDA", "LDX", "LAX",
-	"CPY", "CMP", "NOP", "DCP", "CPY", "CMP", "DEC", "DCP",
-	"INY", "CMP", "DEX", "AXS", "CPY", "CMP", "DEC", "DCP",
-	"BNE", "CMP", "KIL", "DCP", "NOP", "CMP", "DEC", "DCP",
-	"CLD", "CMP", "NOP", "DCP", "NOP", "CMP", "DEC", "DCP",
-	"CPX", "SBC", "NOP", "ISC", "CPX", "SBC", "INC", "ISC",
-	"INX", "SBC", "NOP", "SBC", "CPX", "SBC", "INC", "ISC",
-	"BEQ", "SBC", "KIL", "ISC", "NOP", "SBC", "INC", "ISC",
-	"SED", "SBC", "NOP", "ISC", "NOP", "SBC", "INC", "ISC",
+	"BRK", "ORA", "XXX", "XXX", "NOP", "ORA", "ASL", "XXX", "PHP", "ORA", "ASL", "XXX", "NOP", "ORA", "ASL", "XXX",
+	"BPL", "ORA", "XXX", "XXX", "NOP", "ORA", "ASL", "XXX", "CLC", "ORA", "NOP", "XXX", "NOP", "ORA", "ASL", "XXX",
+	"JSR", "AND", "XXX", "XXX", "BIT", "AND", "ROL", "XXX", "PLP", "AND", "ROL", "XXX", "BIT", "AND", "ROL", "XXX",
+	"BMI", "AND", "XXX", "XXX", "NOP", "AND", "ROL", "XXX", "SEC", "AND", "NOP", "XXX", "NOP", "AND", "ROL", "XXX",
+	"RTI", "EOR", "XXX", "XXX", "NOP", "EOR", "LSR", "XXX", "PHA", "EOR", "LSR", "XXX", "JMP", "EOR", "LSR", "XXX",
+	"BVC", "EOR", "XXX", "XXX", "NOP", "EOR", "LSR", "XXX", "CLI", "EOR", "NOP", "XXX", "NOP", "EOR", "LSR", "XXX",
+	"RTS", "ADC", "XXX", "XXX", "NOP", "ADC", "ROR", "XXX", "PLA", "ADC", "ROR", "XXX", "JMP", "ADC", "ROR", "XXX",
+	"BVS", "ADC", "XXX", "XXX", "NOP", "ADC", "ROR", "XXX", "SEI", "ADC", "NOP", "XXX", "NOP", "ADC", "ROR", "XXX",
+	"NOP", "STA", "NOP", "XXX", "STY", "STA", "STX", "XXX", "DEY", "NOP", "TXA", "XXX", "STY", "STA", "STX", "XXX",
+	"BCC", "STA", "XXX", "XXX", "STY", "STA", "STX", "XXX", "TYA", "STA", "TXS", "XXX", "NOP", "STA", "XXX", "XXX",
+	"LDY", "LDA", "LDX", "XXX", "LDY", "LDA", "LDX", "XXX", "TAY", "LDA", "TAX", "XXX", "LDY", "LDA", "LDX", "XXX",
+	"BCS", "LDA", "XXX", "XXX", "LDY", "LDA", "LDX", "XXX", "CLV", "LDA", "TSX", "XXX", "LDY", "LDA", "LDX", "XXX",
+	"CPY", "CMP", "NOP", "XXX", "CPY", "CMP", "DEC", "XXX", "INY", "CMP", "DEX", "XXX", "CPY", "CMP", "DEC", "XXX",
+	"BNE", "CMP", "XXX", "XXX", "NOP", "CMP", "DEC", "XXX", "CLD", "CMP", "NOP", "XXX", "NOP", "CMP", "DEC", "XXX",
+	"CPX", "SBC", "NOP", "XXX", "CPX", "SBC", "INC", "XXX", "INX", "SBC", "NOP", "SBC", "CPX", "SBC", "INC", "XXX",
+	"BEQ", "SBC", "XXX", "XXX", "NOP", "SBC", "INC", "XXX", "SED", "SBC", "NOP", "XXX", "NOP", "SBC", "INC", "XXX",
 }
 
 type Instruction struct {
@@ -150,6 +95,7 @@ type Instruction struct {
 	cycles  uint8
 }
 
+// CPU MOS 6502 CPU
 type CPU struct {
 	// Public
 	Bus *Bus
@@ -175,51 +121,59 @@ type CPU struct {
 
 func (cpu *CPU) createTable() {
 	cpu.table = [256]func() uint8{
-		cpu.brk, cpu.ora, cpu.kil, cpu.slo, cpu.nop, cpu.ora, cpu.asl, cpu.slo,
-		cpu.php, cpu.ora, cpu.asl, cpu.anc, cpu.nop, cpu.ora, cpu.asl, cpu.slo,
-		cpu.bpl, cpu.ora, cpu.kil, cpu.slo, cpu.nop, cpu.ora, cpu.asl, cpu.slo,
-		cpu.clc, cpu.ora, cpu.nop, cpu.slo, cpu.nop, cpu.ora, cpu.asl, cpu.slo,
-		cpu.jsr, cpu.and, cpu.kil, cpu.rla, cpu.bit, cpu.and, cpu.rol, cpu.rla,
-		cpu.plp, cpu.and, cpu.rol, cpu.anc, cpu.bit, cpu.and, cpu.rol, cpu.rla,
-		cpu.bmi, cpu.and, cpu.kil, cpu.rla, cpu.nop, cpu.and, cpu.rol, cpu.rla,
-		cpu.sec, cpu.and, cpu.nop, cpu.rla, cpu.nop, cpu.and, cpu.rol, cpu.rla,
-		cpu.rti, cpu.eor, cpu.kil, cpu.sre, cpu.nop, cpu.eor, cpu.lsr, cpu.sre,
-		cpu.pha, cpu.eor, cpu.lsr, cpu.alr, cpu.jmp, cpu.eor, cpu.lsr, cpu.sre,
-		cpu.bvc, cpu.eor, cpu.kil, cpu.sre, cpu.nop, cpu.eor, cpu.lsr, cpu.sre,
-		cpu.cli, cpu.eor, cpu.nop, cpu.sre, cpu.nop, cpu.eor, cpu.lsr, cpu.sre,
-		cpu.rts, cpu.adc, cpu.kil, cpu.rra, cpu.nop, cpu.adc, cpu.ror, cpu.rra,
-		cpu.pla, cpu.adc, cpu.ror, cpu.arr, cpu.jmp, cpu.adc, cpu.ror, cpu.rra,
-		cpu.bvs, cpu.adc, cpu.kil, cpu.rra, cpu.nop, cpu.adc, cpu.ror, cpu.rra,
-		cpu.sei, cpu.adc, cpu.nop, cpu.rra, cpu.nop, cpu.adc, cpu.ror, cpu.rra,
-		cpu.nop, cpu.sta, cpu.nop, cpu.sax, cpu.sty, cpu.sta, cpu.stx, cpu.sax,
-		cpu.dey, cpu.nop, cpu.txa, cpu.xaa, cpu.sty, cpu.sta, cpu.stx, cpu.sax,
-		cpu.bcc, cpu.sta, cpu.kil, cpu.ahx, cpu.sty, cpu.sta, cpu.stx, cpu.sax,
-		cpu.tya, cpu.sta, cpu.txs, cpu.tas, cpu.shy, cpu.sta, cpu.shx, cpu.ahx,
-		cpu.ldy, cpu.lda, cpu.ldx, cpu.lax, cpu.ldy, cpu.lda, cpu.ldx, cpu.lax,
-		cpu.tay, cpu.lda, cpu.tax, cpu.lax, cpu.ldy, cpu.lda, cpu.ldx, cpu.lax,
-		cpu.bcs, cpu.lda, cpu.kil, cpu.lax, cpu.ldy, cpu.lda, cpu.ldx, cpu.lax,
-		cpu.clv, cpu.lda, cpu.tsx, cpu.las, cpu.ldy, cpu.lda, cpu.ldx, cpu.lax,
-		cpu.cpy, cpu.cmp, cpu.nop, cpu.dcp, cpu.cpy, cpu.cmp, cpu.dec, cpu.dcp,
-		cpu.iny, cpu.cmp, cpu.dex, cpu.axs, cpu.cpy, cpu.cmp, cpu.dec, cpu.dcp,
-		cpu.bne, cpu.cmp, cpu.kil, cpu.dcp, cpu.nop, cpu.cmp, cpu.dec, cpu.dcp,
-		cpu.cld, cpu.cmp, cpu.nop, cpu.dcp, cpu.nop, cpu.cmp, cpu.dec, cpu.dcp,
-		cpu.cpx, cpu.sbc, cpu.nop, cpu.isc, cpu.cpx, cpu.sbc, cpu.inc, cpu.isc,
-		cpu.inx, cpu.sbc, cpu.nop, cpu.sbc, cpu.cpx, cpu.sbc, cpu.inc, cpu.isc,
-		cpu.beq, cpu.sbc, cpu.kil, cpu.isc, cpu.nop, cpu.sbc, cpu.inc, cpu.isc,
-		cpu.sed, cpu.sbc, cpu.nop, cpu.isc, cpu.nop, cpu.sbc, cpu.inc, cpu.isc,
+		cpu.brk, cpu.ora, cpu.xxx, cpu.xxx, cpu.nop, cpu.ora, cpu.asl, cpu.xxx, cpu.php, cpu.ora, cpu.asl, cpu.xxx, cpu.nop, cpu.ora, cpu.asl, cpu.xxx,
+		cpu.bpl, cpu.ora, cpu.xxx, cpu.xxx, cpu.nop, cpu.ora, cpu.asl, cpu.xxx, cpu.clc, cpu.ora, cpu.nop, cpu.xxx, cpu.nop, cpu.ora, cpu.asl, cpu.xxx,
+		cpu.jsr, cpu.and, cpu.xxx, cpu.xxx, cpu.bit, cpu.and, cpu.rol, cpu.xxx, cpu.plp, cpu.and, cpu.rol, cpu.xxx, cpu.bit, cpu.and, cpu.rol, cpu.xxx,
+		cpu.bmi, cpu.and, cpu.xxx, cpu.xxx, cpu.nop, cpu.and, cpu.rol, cpu.xxx, cpu.sec, cpu.and, cpu.nop, cpu.xxx, cpu.nop, cpu.and, cpu.rol, cpu.xxx,
+		cpu.rti, cpu.eor, cpu.xxx, cpu.xxx, cpu.nop, cpu.eor, cpu.lsr, cpu.xxx, cpu.pha, cpu.eor, cpu.lsr, cpu.xxx, cpu.jmp, cpu.eor, cpu.lsr, cpu.xxx,
+		cpu.bvc, cpu.eor, cpu.xxx, cpu.xxx, cpu.nop, cpu.eor, cpu.lsr, cpu.xxx, cpu.cli, cpu.eor, cpu.nop, cpu.xxx, cpu.nop, cpu.eor, cpu.lsr, cpu.xxx,
+		cpu.rts, cpu.adc, cpu.xxx, cpu.xxx, cpu.nop, cpu.adc, cpu.ror, cpu.xxx, cpu.pla, cpu.adc, cpu.ror, cpu.xxx, cpu.jmp, cpu.adc, cpu.ror, cpu.xxx,
+		cpu.bvs, cpu.adc, cpu.xxx, cpu.xxx, cpu.nop, cpu.adc, cpu.ror, cpu.xxx, cpu.sei, cpu.adc, cpu.nop, cpu.xxx, cpu.nop, cpu.adc, cpu.ror, cpu.xxx,
+		cpu.nop, cpu.sta, cpu.nop, cpu.xxx, cpu.sty, cpu.sta, cpu.stx, cpu.xxx, cpu.dey, cpu.nop, cpu.txa, cpu.xxx, cpu.sty, cpu.sta, cpu.stx, cpu.xxx,
+		cpu.bcc, cpu.sta, cpu.xxx, cpu.xxx, cpu.sty, cpu.sta, cpu.stx, cpu.xxx, cpu.tya, cpu.sta, cpu.txs, cpu.xxx, cpu.nop, cpu.sta, cpu.xxx, cpu.xxx,
+		cpu.ldy, cpu.lda, cpu.ldx, cpu.xxx, cpu.ldy, cpu.lda, cpu.ldx, cpu.xxx, cpu.tay, cpu.lda, cpu.tax, cpu.xxx, cpu.ldy, cpu.lda, cpu.ldx, cpu.xxx,
+		cpu.bcs, cpu.lda, cpu.xxx, cpu.xxx, cpu.ldy, cpu.lda, cpu.ldx, cpu.xxx, cpu.clv, cpu.lda, cpu.tsx, cpu.xxx, cpu.ldy, cpu.lda, cpu.ldx, cpu.xxx,
+		cpu.cpy, cpu.cmp, cpu.nop, cpu.xxx, cpu.cpy, cpu.cmp, cpu.dec, cpu.xxx, cpu.iny, cpu.cmp, cpu.dex, cpu.xxx, cpu.cpy, cpu.cmp, cpu.dec, cpu.xxx,
+		cpu.bne, cpu.cmp, cpu.xxx, cpu.xxx, cpu.nop, cpu.cmp, cpu.dec, cpu.xxx, cpu.cld, cpu.cmp, cpu.nop, cpu.xxx, cpu.nop, cpu.cmp, cpu.dec, cpu.xxx,
+		cpu.cpx, cpu.sbc, cpu.nop, cpu.xxx, cpu.cpx, cpu.sbc, cpu.inc, cpu.xxx, cpu.inx, cpu.sbc, cpu.nop, cpu.sbc, cpu.cpx, cpu.sbc, cpu.inc, cpu.xxx,
+		cpu.beq, cpu.sbc, cpu.xxx, cpu.xxx, cpu.nop, cpu.sbc, cpu.inc, cpu.xxx, cpu.sed, cpu.sbc, cpu.nop, cpu.xxx, cpu.nop, cpu.sbc, cpu.inc, cpu.xxx,
 	}
 }
 
+// ConnectCPU Initialize a CPU and connect it to the bus
 func ConnectCPU(bus *Bus) *CPU {
 	cpu := CPU{}
 	cpu.Bus = bus
+	cpu.createTable()
 	return &cpu
+}
+
+// Reset Reset CPU
+func (cpu *CPU) Reset() {
+	cpu.addrAbs = 0xFFFC
+	var lo uint16 = uint16(cpu.read(cpu.addrAbs + 0))
+	var hi uint16 = uint16(cpu.read(cpu.addrAbs + 1))
+
+	cpu.PC = (hi << 8) | lo
+
+	cpu.A = 0
+	cpu.X = 0
+	cpu.Y = 0
+	cpu.SP = 0xFD
+	cpu.Status = 0x00 | flagUnused
+
+	cpu.addrAbs = 0x0000
+	cpu.addrRel = 0x0000
+	cpu.fetched = 0x00
+
+	// Interrupt reset need cycles.
+	cpu.cycles = 8
 }
 
 // IO
 // Read reads one byte from bus and return a word value.
 func (cpu *CPU) read(addr uint16) uint8 {
-	return cpu.Bus.Read(addr)
+	return cpu.Bus.Read(addr, false)
 }
 
 func (cpu *CPU) write(addr uint16, data uint8) {
@@ -242,6 +196,7 @@ func (cpu *CPU) setFlag(f uint8, v bool) {
 	}
 }
 
+// Clock Tick CPU once.
 func (cpu *CPU) Clock() {
 	if cpu.cycles == 0 {
 		cpu.opcode = cpu.read(cpu.PC)
@@ -362,30 +317,10 @@ func (cpu *CPU) Clock() {
 	cpu.cycles--
 }
 
-func (cpu CPU) reset() {
-	cpu.addrAbs = 0xFFFC
-	var lo uint16 = uint16(cpu.read(cpu.addrAbs + 0))
-	var hi uint16 = uint16(cpu.read(cpu.addrAbs + 1))
-
-	cpu.PC = (hi << 8) | lo
-
-	cpu.A = 0
-	cpu.X = 0
-	cpu.Y = 0
-	cpu.SP = 0xFD
-	cpu.Status = 0x00 | flagUnused
-
-	cpu.addrAbs = 0x0000
-	cpu.addrRel = 0x0000
-	cpu.fetched = 0x00
-
-	// Interrupt reset need cycles.
-	cpu.cycles = 8
-}
-
 // Interrupts
-// Interrupt request
-func (cpu *CPU) irq() {
+
+// Irq Interrupt request
+func (cpu *CPU) Irq() {
 	if cpu.getFlag(flagDisableInterrupts) == 0 {
 		cpu.write(0x0100+uint16(cpu.SP), uint8((cpu.PC>>8)&0x00FF))
 		cpu.SP--
@@ -407,8 +342,8 @@ func (cpu *CPU) irq() {
 	}
 }
 
-// Non-Maskable interrupt
-func (cpu *CPU) nmi() {
+// Nmi Non-maskable interrupt
+func (cpu *CPU) Nmi() {
 	cpu.write(0x0100+uint16(cpu.SP), uint8((cpu.PC>>8)&0x00FF))
 	cpu.SP--
 	cpu.write(0x0100+uint16(cpu.SP), uint8(cpu.PC&0x00FF))
@@ -430,11 +365,10 @@ func (cpu *CPU) nmi() {
 
 // Instructions
 func (cpu *CPU) fetch() uint8 {
-	var fetched uint8 = 0
 	if instructionModes[cpu.opcode] != modeImplied {
-		fetched = cpu.read(cpu.addrAbs)
+		cpu.fetched = cpu.read(cpu.addrAbs)
 	}
-	return fetched
+	return cpu.fetched
 }
 
 // Legal instructions
@@ -1042,25 +976,38 @@ func (cpu *CPU) xaa() uint8 {
 	return 0
 }
 
+// This method represents all illegal instructions for convenience.
+func (cpu *CPU) xxx() uint8 {
+	return 0
+}
+
 // Helper functions
 
+// Complete Check if CPU has done its job
 func (cpu *CPU) Complete() bool {
 	return cpu.cycles == 0
 }
 
-func (cpu *CPU) disassemble(nStart uint16, nStop uint16) map[uint16]string {
-	var addr uint16 = nStart
+// Disassemble Converts 6502 binary to human readable 6502 assembly. It also returns the last value of the map.
+func (cpu *CPU) Disassemble(nStart uint16, nStop uint16) map[uint16]string {
+	var addr uint32 = uint32(nStart)
 	var value, hi, lo uint8 = 0x00, 0x00, 0x00
 
-	var mapLines map[uint16]string
+	// Initialize our map
+	var mapLines map[uint16]string = make(map[uint16]string)
+
 	var lineAddr uint16 = 0
 
-	for addr <= nStop {
+	for addr <= uint32(nStop) {
+		if addr == 0x8000 {
+			fmt.Println("hit")
+			fmt.Println(instructionNames[162])
+		}
 		lineAddr = uint16(addr)
 
-		sInst := "$" + hex(addr, 4) + ": "
+		sInst := "$" + ConvertToHex(uint16(addr), 4) + ": "
 
-		opcode := cpu.Bus.Read(addr)
+		opcode := cpu.Bus.Read(uint16(addr))
 		addr++
 		sInst += instructionNames[opcode] + " "
 
@@ -1070,76 +1017,65 @@ func (cpu *CPU) disassemble(nStart uint16, nStop uint16) map[uint16]string {
 		case modeImplied:
 			sInst += " {IMP}"
 		case modeImmediate:
-			value = cpu.Bus.Read(addr)
-			sInst += "#$" + hex(uint16(value), 2) + " {IMM}"
+			value = cpu.Bus.Read(uint16(addr))
+			addr++
+			sInst += "#$" + ConvertToHex(uint16(value), 2) + " {IMM}"
 		case modeZeroPage:
-			lo = cpu.Bus.Read(addr)
+			lo = cpu.Bus.Read(uint16(addr))
 			addr++
 			hi = 0x00
-			sInst += "$" + hex(uint16(lo), 2) + " {ZP0}"
+			sInst += "$" + ConvertToHex(uint16(lo), 2) + " {ZP0}"
 		case modeZeroPageX:
-			lo = cpu.Bus.Read(addr)
+			lo = cpu.Bus.Read(uint16(addr))
 			addr++
 			hi = 0x00
-			sInst += "$" + hex(uint16(lo), 2) + ", X {ZPX}"
+			sInst += "$" + ConvertToHex(uint16(lo), 2) + ", X {ZPX}"
 		case modeZeroPageY:
-			lo = cpu.Bus.Read(addr)
+			lo = cpu.Bus.Read(uint16(addr))
 			addr++
 			hi = 0x00
-			sInst += "$" + hex(uint16(lo), 2) + ", Y {ZPY}"
+			sInst += "$" + ConvertToHex(uint16(lo), 2) + ", Y {ZPY}"
 		case modeIndirectX:
-			lo = cpu.Bus.Read(addr)
+			lo = cpu.Bus.Read(uint16(addr))
 			addr++
 			hi = 0x00
-			sInst += "($" + hex(uint16(lo), 2) + ", X) {IZX}"
+			sInst += "($" + ConvertToHex(uint16(lo), 2) + ", X) {IZX}"
 		case modeIndirectY:
-			lo = cpu.Bus.Read(addr)
+			lo = cpu.Bus.Read(uint16(addr))
 			addr++
 			hi = 0x00
-			sInst += "($" + hex(uint16(lo), 2) + ", Y) {IZY}"
+			sInst += "($" + ConvertToHex(uint16(lo), 2) + ", Y) {IZY}"
 		case modeAbsolute:
-			lo = cpu.Bus.Read(addr)
+			lo = cpu.Bus.Read(uint16(addr))
 			addr++
-			hi = cpu.Bus.Read(addr)
+			hi = cpu.Bus.Read(uint16(addr))
 			addr++
-			sInst += "$" + hex(uint16(hi)<<8|uint16(lo), 4) + " {ABS}"
+			sInst += "$" + ConvertToHex(uint16(hi)<<8|uint16(lo), 4) + " {ABS}"
 		case modeAbsoluteX:
-			lo = cpu.Bus.Read(addr)
+			lo = cpu.Bus.Read(uint16(addr))
 			addr++
-			hi = cpu.Bus.Read(addr)
+			hi = cpu.Bus.Read(uint16(addr))
 			addr++
-			sInst += "$" + hex(uint16(hi)<<8|uint16(lo), 4) + ", X {ABX}"
+			sInst += "$" + ConvertToHex(uint16(hi)<<8|uint16(lo), 4) + ", X {ABX}"
 		case modeAbsoluteY:
-			lo = cpu.Bus.Read(addr)
+			lo = cpu.Bus.Read(uint16(addr))
 			addr++
-			hi = cpu.Bus.Read(addr)
+			hi = cpu.Bus.Read(uint16(addr))
 			addr++
-			sInst += "$" + hex(uint16(hi)<<8|uint16(lo), 4) + ", Y {ABY}"
+			sInst += "$" + ConvertToHex(uint16(hi)<<8|uint16(lo), 4) + ", Y {ABY}"
 		case modeIndirect:
-			lo = cpu.Bus.Read(addr)
+			lo = cpu.Bus.Read(uint16(addr))
 			addr++
-			hi = cpu.Bus.Read(addr)
+			hi = cpu.Bus.Read(uint16(addr))
 			addr++
-			sInst += "($" + hex(uint16(hi)<<8|uint16(lo), 4) + ") {IND}"
+			sInst += "($" + ConvertToHex(uint16(hi)<<8|uint16(lo), 4) + ") {IND}"
 		case modeRelative:
-			value = cpu.Bus.Read(addr)
+			value = cpu.Bus.Read(uint16(addr))
 			addr++
-			sInst += "$" + hex(uint16(value), 2) + "[$" + hex(addr+uint16(value), 4) + "] {REL}"
+			sInst += "$" + ConvertToHex(uint16(value), 2) + "[$" + ConvertToHex(uint16(addr)+uint16(value), 4) + "] {REL}"
 		}
 		mapLines[lineAddr] = sInst
 	}
 
 	return mapLines
-}
-
-func replaceAtIndex(str string, replacement byte, index int) string {
-	return str[:index] + string(replacement) + str[index+1:]
-}
-
-func hex(n uint16, d uint8) string {
-	var s string = strings.Repeat("0", int(d))
-	for i := int(d) - 1; i >= 0; i, n = i-1, n>>4 {
-		s = replaceAtIndex(s, "0123456789ABCDEF"[n&0xF], i)
-	}
-	return s
 }
