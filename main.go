@@ -30,6 +30,7 @@ type demoCPU struct {
 	font     *ttf.Font
 }
 
+// Private draw functions
 func (demo *demoCPU) drawString(x int, y int, str string, color *sdl.Color) {
 	// Create text
 	text, err := demo.font.RenderUTF8Blended(str, *color)
@@ -39,7 +40,7 @@ func (demo *demoCPU) drawString(x int, y int, str string, color *sdl.Color) {
 	}
 	defer text.Free()
 
-	// Draw text
+	// Draw text, noted that you should always draw on buffer instead of directly draw on screen and blow yourself up.
 	if err = text.Blit(nil, demo.buffer, &sdl.Rect{X: int32(x), Y: int32(y)}); err != nil {
 		fmt.Printf("Failed to draw text: %s\n", err)
 		return
@@ -48,7 +49,7 @@ func (demo *demoCPU) drawString(x int, y int, str string, color *sdl.Color) {
 	demo.window.UpdateSurface()
 }
 
-// Private draw functions
+// Draw out our RAM layouts.
 func (demo *demoCPU) drawRAM(x int, y int, nAddr uint16, nRows int, nColumns int) {
 	var nRAMX, nRAMY int = x, y
 	for row := 0; row < nRows; row++ {
@@ -62,6 +63,7 @@ func (demo *demoCPU) drawRAM(x int, y int, nAddr uint16, nRows int, nColumns int
 	}
 }
 
+// Draw CPU's internal state.
 func (demo *demoCPU) drawCPU(x int, y int) {
 	var color *sdl.Color = &sdl.Color{0, 255, 0, 0}
 	demo.drawString(x, y, "STATUS:", color)
@@ -80,7 +82,9 @@ func (demo *demoCPU) drawCPU(x int, y int) {
 	demo.drawString(x, y+50, "SP: $"+nes.ConvertToHex(uint16(demo.bus.CPU.SP), 4), color)
 }
 
+// Draw disassembled code.
 func (demo *demoCPU) drawASM(x int, y int, nLines int) {
+	// I hate it without sorted map. Lots of hacky stuffs happen here.
 	itA := demo.mapASM[demo.bus.CPU.PC]
 	var nLineY int = (nLines>>1)*10 + y
 	var idx int = sort.SearchInts(demo.mapKeys, int(demo.bus.CPU.PC))
@@ -101,6 +105,7 @@ func (demo *demoCPU) drawASM(x int, y int, nLines int) {
 		for nLineY > y {
 			nLineY -= 10
 			idx--
+			// Check if our index is out of range since we're subtracting it.
 			if idx != len(demo.mapKeys)-1 && idx > 0 {
 				demo.drawString(x, nLineY, demo.mapASM[uint16(demo.mapKeys[idx])], &sdl.Color{0, 255, 0, 0})
 			}
@@ -108,6 +113,7 @@ func (demo *demoCPU) drawASM(x int, y int, nLines int) {
 	}
 }
 
+// Test what color should we use based on flag's state.
 func (demo *demoCPU) getFlagColor(flag uint8) *sdl.Color {
 	if flag == 0 {
 		return &sdl.Color{0, 255, 0, 0}
@@ -115,9 +121,11 @@ func (demo *demoCPU) getFlagColor(flag uint8) *sdl.Color {
 	return &sdl.Color{255, 0, 0, 0}
 }
 
+// Construct our demo.
 func (demo *demoCPU) Construct(width int32, height int32) error {
 	var err error
 
+	// Init our NES.
 	demo.bus = nes.NewBus()
 
 	// Init sdl2
@@ -125,14 +133,18 @@ func (demo *demoCPU) Construct(width int32, height int32) error {
 		fmt.Printf("Failed to init sdl2: %s\n", err)
 		return err
 	}
-	// defer sdl.Quit()
 
 	// Initialize font
 	if err = ttf.Init(); err != nil {
 		fmt.Printf("Failed to init font: %s\n", err)
 		return err
 	}
-	// defer ttf.Quit()
+
+	// Load the font for our text
+	if demo.font, err = ttf.OpenFont(fontPath, fontSize); err != nil {
+		fmt.Printf("Failed to load font: %s\n", err)
+		return err
+	}
 
 	// Create window
 	demo.window, err = sdl.CreateWindow(windowTitle, sdl.WINDOWPOS_UNDEFINED, sdl.WINDOWPOS_UNDEFINED,
@@ -141,8 +153,8 @@ func (demo *demoCPU) Construct(width int32, height int32) error {
 		fmt.Printf("Failed to create window: %s\n", err)
 		return err
 	}
-	// defer demo.window.Destroy()
 
+	// Create draw surface and draw buffer
 	if demo.surface, err = demo.window.GetSurface(); err != nil {
 		fmt.Printf("Failed to get window surface: %s\n", err)
 		return err
@@ -158,31 +170,15 @@ func (demo *demoCPU) Construct(width int32, height int32) error {
 		fmt.Printf("Failed to create renderer: %s\n", err)
 		return err
 	}
-	// defer demo.renderer.Destroy()
-
-	// Load the font for our text
-	if demo.font, err = ttf.OpenFont(fontPath, fontSize); err != nil {
-		fmt.Printf("Failed to load font: %s\n", err)
-		return err
-	}
-	// defer demo.font.Close()
-
-	// running := true
-	// for running {
-	// 	for event := sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
-	// 		switch event.(type) {
-	// 		case *sdl.QuitEvent:
-	// 			running = false
-	// 		}
-	// 	}
-
-	// 	sdl.Delay(16)
-	// }
 
 	return nil
 }
 
 func (demo *demoCPU) Update() bool {
+	// Using double buffering technique to prevent flickering.
+
+	//Get user inputs.
+	// I should probably split out this part and make this looks neater.
 	for event := sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
 		switch t := event.(type) {
 		case *sdl.QuitEvent:
@@ -204,12 +200,14 @@ func (demo *demoCPU) Update() bool {
 		}
 	}
 
+	// Render stuffs.
 	demo.drawRAM(2, 2, 0x0000, 16, 16)
 	demo.drawRAM(2, 182, 0x8000, 16, 16)
 	demo.drawCPU(448, 2)
 	demo.drawASM(448, 72, 26)
+	demo.drawString(2, 362, "SPACE - step one, R - reset, I - IRQ, N - NMI", &sdl.Color{0, 255, 0, 0})
 
-	// Swap buffer
+	// Swap buffer and present our rendered content.
 	demo.buffer.Blit(nil, demo.surface, nil)
 	demo.buffer.FillRect(nil, 0)
 
@@ -217,8 +215,26 @@ func (demo *demoCPU) Update() bool {
 }
 
 func (demo *demoCPU) Start() {
-	var binStr string = "A2 0A 8E 00 00 A2 03 8E 01 00 AC 00 00 A9 00 18 6D 01 00 88 D0 FA 8D 02 00 EA EA EA"
+	// ASM code
+	// *=$8000
+	// LDX #10
+	// STX $0000
+	// LDX #3
+	// STX $0001
+	// LDY $0000
+	// LDA #0
+	// CLC
+	// loop
+	// ADC $0001
+	// DEY
+	// BNE loop
+	// STA $0002
+	// NOP
+	// NOP
+	// NOP
+	var binStr string = "A2 0A 8E 00 00 A2 03 8E 01 00 AC 00 00 A9 00 18 6D 01 00 88 D0 FA 8D 02 00 EA EA EA" // binary represent
 	binStr = strings.ReplaceAll(binStr, " ", "")
+
 	bin, err := hex.DecodeString(binStr)
 	if err != nil {
 		fmt.Printf("Exception occurred when decoding string.")
@@ -235,6 +251,7 @@ func (demo *demoCPU) Start() {
 	demo.bus.RAM[0xFFFD] = 0x80
 
 	demo.mapASM = demo.bus.CPU.Disassemble(0x0000, 0xFFFF)
+	// Create a collection of keys so that we can iter over.
 	demo.mapKeys = make([]int, 0)
 	for k := range demo.mapASM {
 		demo.mapKeys = append(demo.mapKeys, int(k))
@@ -254,7 +271,7 @@ func (demo *demoCPU) Start() {
 func main() {
 	fmt.Println(windowTitle)
 
-	// I really enjoy its graphics.
+	// I really enjoy its graphics. I mean the anime movie.
 	fmt.Println("HELLO WORLD -ALLTALE-")
 	fmt.Println("With programming we have god's hand.")
 	demo := demoCPU{}
