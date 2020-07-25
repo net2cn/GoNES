@@ -6,13 +6,6 @@ import (
 
 const (
 	_ = iota
-	interruptNone
-	interruptNMI
-	interruptIRQ
-)
-
-const (
-	_ = iota
 	modeImplied
 	modeImmediate
 	modeZeroPage
@@ -21,7 +14,7 @@ const (
 	modeRelative
 	modeAbsolute
 	modeAbsoluteX
-	modeAbosluteY
+	modeAbsoluteY
 	modeIndirect
 	modeIndirectX
 	modeIndirectY
@@ -308,7 +301,7 @@ func (cpu *CPU) Clock() {
 			if (cpu.addrAbs & 0xFF00) != uint16((hi << 8)) {
 				cpu.cycles++
 			}
-		case modeAbosluteY:
+		case modeAbsoluteY:
 			var lo uint16 = uint16(cpu.read(cpu.PC))
 			cpu.PC++
 			var hi uint16 = uint16(cpu.read(cpu.PC))
@@ -331,9 +324,9 @@ func (cpu *CPU) Clock() {
 			// Notice that accroding to wiki, there's a page boundary
 			// hardware bug.
 			if ptrLo == 0x00FF {
-				cpu.addrAbs = uint16((cpu.read(ptr&0xFF00) << 8) | cpu.read(ptr+0))
+				cpu.addrAbs = (uint16(cpu.read(ptr&0xFF00)) << 8) | uint16(cpu.read(ptr+0))
 			} else {
-				cpu.addrAbs = uint16((cpu.read(ptr+1) << 8) | cpu.read(ptr+0))
+				cpu.addrAbs = (uint16(cpu.read(ptr+1)) << 8) | uint16(cpu.read(ptr+0))
 			}
 		case modeIndirectX:
 			var t uint16 = uint16(cpu.read(cpu.PC))
@@ -1050,11 +1043,12 @@ func (cpu *CPU) xaa() uint8 {
 }
 
 // Helper functions
+
 func (cpu *CPU) Complete() bool {
 	return cpu.cycles == 0
 }
 
-func (cpu *CPU) disassemble(nStart uint16, nStop uint16) {
+func (cpu *CPU) disassemble(nStart uint16, nStop uint16) map[uint16]string {
 	var addr uint16 = nStart
 	var value, hi, lo uint8 = 0x00, 0x00, 0x00
 
@@ -1088,9 +1082,54 @@ func (cpu *CPU) disassemble(nStart uint16, nStop uint16) {
 			addr++
 			hi = 0x00
 			sInst += "$" + hex(uint16(lo), 2) + ", X {ZPX}"
-			// TODO: Finish this simple disassembler
+		case modeZeroPageY:
+			lo = cpu.Bus.Read(addr)
+			addr++
+			hi = 0x00
+			sInst += "$" + hex(uint16(lo), 2) + ", Y {ZPY}"
+		case modeIndirectX:
+			lo = cpu.Bus.Read(addr)
+			addr++
+			hi = 0x00
+			sInst += "($" + hex(uint16(lo), 2) + ", X) {IZX}"
+		case modeIndirectY:
+			lo = cpu.Bus.Read(addr)
+			addr++
+			hi = 0x00
+			sInst += "($" + hex(uint16(lo), 2) + ", Y) {IZY}"
+		case modeAbsolute:
+			lo = cpu.Bus.Read(addr)
+			addr++
+			hi = cpu.Bus.Read(addr)
+			addr++
+			sInst += "$" + hex(uint16(hi)<<8|uint16(lo), 4) + " {ABS}"
+		case modeAbsoluteX:
+			lo = cpu.Bus.Read(addr)
+			addr++
+			hi = cpu.Bus.Read(addr)
+			addr++
+			sInst += "$" + hex(uint16(hi)<<8|uint16(lo), 4) + ", X {ABX}"
+		case modeAbsoluteY:
+			lo = cpu.Bus.Read(addr)
+			addr++
+			hi = cpu.Bus.Read(addr)
+			addr++
+			sInst += "$" + hex(uint16(hi)<<8|uint16(lo), 4) + ", Y {ABY}"
+		case modeIndirect:
+			lo = cpu.Bus.Read(addr)
+			addr++
+			hi = cpu.Bus.Read(addr)
+			addr++
+			sInst += "($" + hex(uint16(hi)<<8|uint16(lo), 4) + ") {IND}"
+		case modeRelative:
+			value = cpu.Bus.Read(addr)
+			addr++
+			sInst += "$" + hex(uint16(value), 2) + "[$" + hex(addr+uint16(value), 4) + "] {REL}"
 		}
+		mapLines[lineAddr] = sInst
 	}
+
+	return mapLines
 }
 
 func replaceAtIndex(str string, replacement byte, index int) string {
