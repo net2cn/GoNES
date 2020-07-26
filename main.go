@@ -15,13 +15,14 @@ import (
 // SDL2 variables
 var windowTitle string = "GoNES SDL2"
 var fontPath string = "./ui/assets/UbuntuMono-R.ttf" // Man, do not use a variable-width font! It looks too ugly with that!
-var fontSize int = 14
+var fontSize int = 15
 var windowWidth, windowHeight int32 = 680, 480
 
 type demoCPU struct {
-	bus     *nes.Bus
-	mapASM  map[uint16]string
-	mapKeys []int
+	bus       *nes.Bus
+	mapASM    map[uint16]string
+	mapKeys   []int
+	inputLock bool
 
 	window   *sdl.Window
 	surface  *sdl.Surface
@@ -32,6 +33,10 @@ type demoCPU struct {
 
 // Private draw functions
 func (demo *demoCPU) drawString(x int, y int, str string, color *sdl.Color) {
+	if len(str) <= 0 {
+		return
+	}
+
 	// Create text
 	text, err := demo.font.RenderUTF8Blended(str, *color)
 	if err != nil {
@@ -67,14 +72,14 @@ func (demo *demoCPU) drawRAM(x int, y int, nAddr uint16, nRows int, nColumns int
 func (demo *demoCPU) drawCPU(x int, y int) {
 	var color *sdl.Color = &sdl.Color{0, 255, 0, 0}
 	demo.drawString(x, y, "STATUS:", color)
-	demo.drawString(x+64, y, "C", demo.getFlagColor(demo.bus.CPU.Status&1))
-	demo.drawString(x+80, y, "Z", demo.getFlagColor(demo.bus.CPU.Status&2))
-	demo.drawString(x+96, y, "I", demo.getFlagColor(demo.bus.CPU.Status&3))
-	demo.drawString(x+112, y, "D", demo.getFlagColor(demo.bus.CPU.Status&4))
-	demo.drawString(x+128, y, "B", demo.getFlagColor(demo.bus.CPU.Status&5))
-	demo.drawString(x+144, y, "U", demo.getFlagColor(demo.bus.CPU.Status&6))
-	demo.drawString(x+160, y, "O", demo.getFlagColor(demo.bus.CPU.Status&7))
-	demo.drawString(x+178, y, "N", demo.getFlagColor(demo.bus.CPU.Status&8))
+	demo.drawString(x+64, y, "C", demo.getFlagColor(demo.bus.CPU.Status&(1<<0)))
+	demo.drawString(x+80, y, "Z", demo.getFlagColor(demo.bus.CPU.Status&(1<<1)))
+	demo.drawString(x+96, y, "I", demo.getFlagColor(demo.bus.CPU.Status&(1<<2)))
+	demo.drawString(x+112, y, "D", demo.getFlagColor(demo.bus.CPU.Status&(1<<3)))
+	demo.drawString(x+128, y, "B", demo.getFlagColor(demo.bus.CPU.Status&(1<<4)))
+	demo.drawString(x+144, y, "U", demo.getFlagColor(demo.bus.CPU.Status&(1<<5)))
+	demo.drawString(x+160, y, "O", demo.getFlagColor(demo.bus.CPU.Status&(1<<6)))
+	demo.drawString(x+178, y, "N", demo.getFlagColor(demo.bus.CPU.Status&(1<<7)))
 	demo.drawString(x, y+10, "PC: $"+nes.ConvertToHex(demo.bus.CPU.PC, 4), color)
 	demo.drawString(x, y+20, "A:  $"+nes.ConvertToHex(uint16(demo.bus.CPU.A), 2), color)
 	demo.drawString(x, y+30, "X:  $"+nes.ConvertToHex(uint16(demo.bus.CPU.X), 2), color)
@@ -89,7 +94,7 @@ func (demo *demoCPU) drawASM(x int, y int, nLines int) {
 	var nLineY int = (nLines>>1)*10 + y
 	var idx int = sort.SearchInts(demo.mapKeys, int(demo.bus.CPU.PC))
 	if itA != demo.mapASM[uint16(demo.mapKeys[len(demo.mapKeys)-1])] {
-		demo.drawString(x, nLineY, itA, &sdl.Color{0, 0, 255, 0})
+		demo.drawString(x, nLineY, itA, &sdl.Color{255, 255, 0, 0})
 		for nLineY < (nLines*10)+y {
 			nLineY += 10
 			idx++
@@ -101,7 +106,7 @@ func (demo *demoCPU) drawASM(x int, y int, nLines int) {
 	idx = sort.SearchInts(demo.mapKeys, int(demo.bus.CPU.PC))
 	nLineY = (nLines>>1)*10 + y
 	if itA != demo.mapASM[uint16(demo.mapKeys[len(demo.mapKeys)-1])] {
-		demo.drawString(x, nLineY, itA, &sdl.Color{0, 0, 255, 0})
+		demo.drawString(x, nLineY, itA, &sdl.Color{255, 255, 0, 0})
 		for nLineY > y {
 			nLineY -= 10
 			idx--
@@ -171,50 +176,6 @@ func (demo *demoCPU) Construct(width int32, height int32) error {
 		return err
 	}
 
-	return nil
-}
-
-func (demo *demoCPU) Update() bool {
-	// Using double buffering technique to prevent flickering.
-
-	//Get user inputs.
-	// I should probably split out this part and make this looks neater.
-	for event := sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
-		switch t := event.(type) {
-		case *sdl.QuitEvent:
-			return false
-		case *sdl.KeyboardEvent:
-			switch t.Keysym.Sym {
-			case sdl.K_SPACE:
-				// Golang's do while.
-				for done := true; done; done = demo.bus.CPU.Complete() != true {
-					demo.bus.CPU.Clock()
-				}
-			case sdl.K_r:
-				demo.bus.CPU.Reset()
-			case sdl.K_i:
-				demo.bus.CPU.Irq()
-			case sdl.K_n:
-				demo.bus.CPU.Nmi()
-			}
-		}
-	}
-
-	// Render stuffs.
-	demo.drawRAM(2, 2, 0x0000, 16, 16)
-	demo.drawRAM(2, 182, 0x8000, 16, 16)
-	demo.drawCPU(448, 2)
-	demo.drawASM(448, 72, 26)
-	demo.drawString(2, 362, "SPACE - step one, R - reset, I - IRQ, N - NMI", &sdl.Color{0, 255, 0, 0})
-
-	// Swap buffer and present our rendered content.
-	demo.buffer.Blit(nil, demo.surface, nil)
-	demo.buffer.FillRect(nil, 0)
-
-	return true
-}
-
-func (demo *demoCPU) Start() {
 	// ASM code
 	// *=$8000
 	// LDX #10
@@ -260,6 +221,67 @@ func (demo *demoCPU) Start() {
 
 	demo.bus.CPU.Reset()
 
+	// Get inputLock ready for user input.
+	demo.inputLock = false
+
+	return nil
+}
+
+func (demo *demoCPU) Update() bool {
+	// Using double buffering technique to prevent flickering.
+
+	//Get user inputs.
+	// I should probably split out this part and make this looks neater.
+	for event := sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
+		switch t := event.(type) {
+		case *sdl.QuitEvent:
+			return false
+		case *sdl.KeyboardEvent:
+			if !demo.inputLock {
+				switch t.Keysym.Sym {
+				case sdl.K_SPACE:
+					// Golang's do while.
+					for done := true; done; done = demo.bus.CPU.Complete() != true {
+						demo.bus.CPU.Clock()
+					}
+				case sdl.K_r:
+					demo.bus.CPU.Reset()
+				case sdl.K_i:
+					demo.bus.CPU.Irq()
+				case sdl.K_n:
+					demo.bus.CPU.Nmi()
+				}
+			}
+
+			// Anti-jittering
+			if t.Repeat > 0 {
+				demo.inputLock = false
+			} else {
+				if t.State == sdl.RELEASED {
+					demo.inputLock = false
+				} else if t.State == sdl.PRESSED {
+					demo.inputLock = true
+				}
+			}
+
+		}
+	}
+
+	// Render stuffs.
+	demo.drawRAM(2, 2, 0x0000, 16, 16)
+	demo.drawRAM(2, 182, 0x8000, 16, 16)
+	demo.drawCPU(448, 2)
+	demo.drawASM(448, 72, 26)
+	demo.drawString(2, 362, "SPACE - step one, R - reset, I - IRQ, N - NMI", &sdl.Color{0, 255, 0, 0})
+
+	// Swap buffer and present our rendered content.
+	demo.buffer.Blit(nil, demo.surface, nil)
+	demo.buffer.FillRect(nil, 0)
+
+	return true
+}
+
+func (demo *demoCPU) Start() {
 	running := true
 	for running {
 		running = demo.Update()

@@ -1,7 +1,5 @@
 package nes
 
-import "fmt"
-
 const (
 	_ = iota
 	modeImplied
@@ -19,15 +17,14 @@ const (
 )
 
 const (
-	_ = iota
-	flagCarryBit
-	flagZero
-	flagDisableInterrupts
-	flagDecimalMode // Redundant
-	flagBreak
-	flagUnused
-	flagOverflow
-	flagNegative
+	flagCarryBit          = (1 << 0)
+	flagZero              = (1 << 1)
+	flagDisableInterrupts = (1 << 2)
+	flagDecimalMode       = (1 << 3) // Redundant
+	flagBreak             = (1 << 4)
+	flagUnused            = (1 << 5)
+	flagOverflow          = (1 << 6)
+	flagNegative          = (1 << 7)
 )
 
 var instructionModes = [256]byte{
@@ -116,11 +113,12 @@ type CPU struct {
 	cycles     uint8
 	clockCount uint32
 
-	table [256]func() uint8
+	opcodeTable [256]func() uint8
+	modeTable   [256]func() uint8
 }
 
 func (cpu *CPU) createTable() {
-	cpu.table = [256]func() uint8{
+	cpu.opcodeTable = [256]func() uint8{
 		cpu.brk, cpu.ora, cpu.xxx, cpu.xxx, cpu.nop, cpu.ora, cpu.asl, cpu.xxx, cpu.php, cpu.ora, cpu.asl, cpu.xxx, cpu.nop, cpu.ora, cpu.asl, cpu.xxx,
 		cpu.bpl, cpu.ora, cpu.xxx, cpu.xxx, cpu.nop, cpu.ora, cpu.asl, cpu.xxx, cpu.clc, cpu.ora, cpu.nop, cpu.xxx, cpu.nop, cpu.ora, cpu.asl, cpu.xxx,
 		cpu.jsr, cpu.and, cpu.xxx, cpu.xxx, cpu.bit, cpu.and, cpu.rol, cpu.xxx, cpu.plp, cpu.and, cpu.rol, cpu.xxx, cpu.bit, cpu.and, cpu.rol, cpu.xxx,
@@ -137,6 +135,25 @@ func (cpu *CPU) createTable() {
 		cpu.bne, cpu.cmp, cpu.xxx, cpu.xxx, cpu.nop, cpu.cmp, cpu.dec, cpu.xxx, cpu.cld, cpu.cmp, cpu.nop, cpu.xxx, cpu.nop, cpu.cmp, cpu.dec, cpu.xxx,
 		cpu.cpx, cpu.sbc, cpu.nop, cpu.xxx, cpu.cpx, cpu.sbc, cpu.inc, cpu.xxx, cpu.inx, cpu.sbc, cpu.nop, cpu.sbc, cpu.cpx, cpu.sbc, cpu.inc, cpu.xxx,
 		cpu.beq, cpu.sbc, cpu.xxx, cpu.xxx, cpu.nop, cpu.sbc, cpu.inc, cpu.xxx, cpu.sed, cpu.sbc, cpu.nop, cpu.xxx, cpu.nop, cpu.sbc, cpu.inc, cpu.xxx,
+	}
+
+	cpu.modeTable = [256]func() uint8{
+		cpu.imm, cpu.izx, cpu.imp, cpu.imp, cpu.imp, cpu.zp0, cpu.zp0, cpu.imp, cpu.imp, cpu.imm, cpu.imp, cpu.imp, cpu.imp, cpu.abs, cpu.abs, cpu.imp,
+		cpu.rel, cpu.izy, cpu.imp, cpu.imp, cpu.imp, cpu.zpx, cpu.zpx, cpu.imp, cpu.imp, cpu.aby, cpu.imp, cpu.imp, cpu.imp, cpu.abx, cpu.abx, cpu.imp,
+		cpu.abs, cpu.izx, cpu.imp, cpu.imp, cpu.zp0, cpu.zp0, cpu.zp0, cpu.imp, cpu.imp, cpu.imm, cpu.imp, cpu.imp, cpu.abs, cpu.abs, cpu.abs, cpu.imp,
+		cpu.rel, cpu.izy, cpu.imp, cpu.imp, cpu.imp, cpu.zpx, cpu.zpx, cpu.imp, cpu.imp, cpu.aby, cpu.imp, cpu.imp, cpu.imp, cpu.abx, cpu.abx, cpu.imp,
+		cpu.imp, cpu.izx, cpu.imp, cpu.imp, cpu.imp, cpu.zp0, cpu.zp0, cpu.imp, cpu.imp, cpu.imm, cpu.imp, cpu.imp, cpu.abs, cpu.abs, cpu.abs, cpu.imp,
+		cpu.rel, cpu.izy, cpu.imp, cpu.imp, cpu.imp, cpu.zpx, cpu.zpx, cpu.imp, cpu.imp, cpu.aby, cpu.imp, cpu.imp, cpu.imp, cpu.abx, cpu.abx, cpu.imp,
+		cpu.imp, cpu.izx, cpu.imp, cpu.imp, cpu.imp, cpu.zp0, cpu.zp0, cpu.imp, cpu.imp, cpu.imm, cpu.imp, cpu.imp, cpu.ind, cpu.abs, cpu.abs, cpu.imp,
+		cpu.rel, cpu.izy, cpu.imp, cpu.imp, cpu.imp, cpu.zpx, cpu.zpx, cpu.imp, cpu.imp, cpu.aby, cpu.imp, cpu.imp, cpu.imp, cpu.abx, cpu.abx, cpu.imp,
+		cpu.imp, cpu.izx, cpu.imp, cpu.imp, cpu.zp0, cpu.zp0, cpu.zp0, cpu.imp, cpu.imp, cpu.imp, cpu.imp, cpu.imp, cpu.abs, cpu.abs, cpu.abs, cpu.imp,
+		cpu.rel, cpu.izy, cpu.imp, cpu.imp, cpu.zpx, cpu.zpx, cpu.zpy, cpu.imp, cpu.imp, cpu.aby, cpu.imp, cpu.imp, cpu.imp, cpu.abx, cpu.imp, cpu.imp,
+		cpu.imm, cpu.izx, cpu.imm, cpu.imp, cpu.zp0, cpu.zp0, cpu.zp0, cpu.imp, cpu.imp, cpu.imm, cpu.imp, cpu.imp, cpu.abs, cpu.abs, cpu.abs, cpu.imp,
+		cpu.rel, cpu.izy, cpu.imp, cpu.imp, cpu.zpx, cpu.zpx, cpu.zpy, cpu.imp, cpu.imp, cpu.aby, cpu.imp, cpu.imp, cpu.abx, cpu.abx, cpu.aby, cpu.imp,
+		cpu.imm, cpu.izx, cpu.imp, cpu.imp, cpu.zp0, cpu.zp0, cpu.zp0, cpu.imp, cpu.imp, cpu.imm, cpu.imp, cpu.imp, cpu.abs, cpu.abs, cpu.abs, cpu.imp,
+		cpu.rel, cpu.izy, cpu.imp, cpu.imp, cpu.imp, cpu.zpx, cpu.zpx, cpu.imp, cpu.imp, cpu.aby, cpu.imp, cpu.imp, cpu.imp, cpu.abx, cpu.abx, cpu.imp,
+		cpu.imm, cpu.izx, cpu.imp, cpu.imp, cpu.zp0, cpu.zp0, cpu.zp0, cpu.imp, cpu.imp, cpu.imm, cpu.imp, cpu.imp, cpu.abs, cpu.abs, cpu.abs, cpu.imp,
+		cpu.rel, cpu.izy, cpu.imp, cpu.imp, cpu.imp, cpu.zpx, cpu.zpx, cpu.imp, cpu.imp, cpu.aby, cpu.imp, cpu.imp, cpu.imp, cpu.abx, cpu.abx, cpu.imp,
 	}
 }
 
@@ -208,108 +225,9 @@ func (cpu *CPU) Clock() {
 		// Get starting number of cycles
 		cpu.cycles = instructionCycles[cpu.opcode]
 
-		mode := instructionModes[cpu.opcode]
-
-		// TODO: refactor this switch
-		switch mode {
-		case modeImplied:
-			cpu.fetched = cpu.A
-		case modeImmediate:
-			cpu.PC++
-			cpu.addrAbs = cpu.PC
-		case modeZeroPage:
-			cpu.addrAbs = uint16(cpu.read(cpu.PC))
-			cpu.PC++
-			cpu.addrAbs &= 0x00FF
-		case modeZeroPageX:
-			cpu.addrAbs = uint16(cpu.read(cpu.PC) + cpu.X)
-			cpu.PC++
-			cpu.addrAbs &= 0x00FF
-		case modeZeroPageY:
-			cpu.addrAbs = uint16(cpu.read(cpu.PC) + cpu.Y)
-			cpu.PC++
-			cpu.addrAbs &= 0x00FF
-		case modeRelative:
-			cpu.addrRel = uint16(cpu.read(cpu.PC))
-			cpu.PC++
-			if (cpu.addrRel & 0x80) != 0 {
-				cpu.addrRel |= 0xFF00
-			}
-		case modeAbsolute:
-			var lo uint16 = uint16(cpu.read(cpu.PC))
-			cpu.PC++
-			var hi uint16 = uint16(cpu.read(cpu.PC))
-			cpu.PC++
-
-			cpu.addrAbs = uint16((hi << 8) | lo)
-		case modeAbsoluteX:
-			var lo uint16 = uint16(cpu.read(cpu.PC))
-			cpu.PC++
-			var hi uint16 = uint16(cpu.read(cpu.PC))
-			cpu.PC++
-
-			cpu.addrAbs = uint16((hi << 8) | lo)
-			cpu.addrAbs += uint16(cpu.X)
-
-			// If page change happens, we add an additional cycles
-			// according to the MOS6502 spec. (a caveat)
-			if (cpu.addrAbs & 0xFF00) != uint16((hi << 8)) {
-				cpu.cycles++
-			}
-		case modeAbsoluteY:
-			var lo uint16 = uint16(cpu.read(cpu.PC))
-			cpu.PC++
-			var hi uint16 = uint16(cpu.read(cpu.PC))
-			cpu.PC++
-
-			cpu.addrAbs = uint16((hi << 8) | lo)
-			cpu.addrAbs += uint16(cpu.Y)
-
-			if (cpu.addrAbs & 0xFF00) != uint16((hi << 8)) {
-				cpu.cycles++
-			}
-		case modeIndirect:
-			var ptrLo uint16 = uint16(cpu.read(cpu.PC))
-			cpu.PC++
-			var ptrHi uint16 = uint16(cpu.read(cpu.PC))
-			cpu.PC++
-
-			var ptr uint16 = uint16((ptrHi << 8) | ptrLo)
-
-			// Notice that accroding to wiki, there's a page boundary
-			// hardware bug.
-			if ptrLo == 0x00FF {
-				cpu.addrAbs = (uint16(cpu.read(ptr&0xFF00)) << 8) | uint16(cpu.read(ptr+0))
-			} else {
-				cpu.addrAbs = (uint16(cpu.read(ptr+1)) << 8) | uint16(cpu.read(ptr+0))
-			}
-		case modeIndirectX:
-			var t uint16 = uint16(cpu.read(cpu.PC))
-			cpu.PC++
-
-			var lo uint16 = uint16(cpu.read((t + uint16(cpu.X)) & 0x00FF))
-			var hi uint16 = uint16(cpu.read((t + uint16(cpu.X) + 1) & 0x00FF))
-
-			cpu.addrAbs = (hi << 8) | lo
-		case modeIndirectY:
-			var t uint16 = uint16(cpu.read(cpu.PC))
-			cpu.PC++
-
-			var lo uint16 = uint16(cpu.read(t & 0x00FF))
-			var hi uint16 = uint16(cpu.read((t + 1) & 0x00FF))
-
-			cpu.addrAbs = (hi << 8) | lo
-			cpu.addrAbs += uint16(cpu.Y)
-
-			// We may cross the page boundary so we may need extra
-			// cycles.
-			if (cpu.addrAbs & 0xFF00) != (hi << 8) {
-				cpu.cycles++
-			}
-		}
-
-		var additionalCycles uint8 = cpu.table[cpu.opcode]()
-		cpu.cycles += additionalCycles
+		additionalCycles1 := cpu.modeTable[cpu.opcode]()
+		additionalCycles2 := cpu.opcodeTable[cpu.opcode]()
+		cpu.cycles += (additionalCycles1 & additionalCycles2)
 
 		cpu.setFlag(flagUnused, true)
 	}
@@ -363,6 +281,137 @@ func (cpu *CPU) Nmi() {
 	cpu.cycles = 8
 }
 
+// Address modes
+func (cpu *CPU) imp() uint8 {
+	cpu.fetched = cpu.A
+	return 0
+}
+
+func (cpu *CPU) imm() uint8 {
+	cpu.addrAbs = cpu.PC
+	cpu.PC++
+	return 0
+}
+
+func (cpu *CPU) zp0() uint8 {
+	cpu.addrAbs = uint16(cpu.read(cpu.PC))
+	cpu.PC++
+	cpu.addrAbs &= 0x00FF
+	return 0
+}
+
+func (cpu *CPU) zpx() uint8 {
+	cpu.addrAbs = uint16(cpu.read(cpu.PC) + cpu.X)
+	cpu.PC++
+	cpu.addrAbs &= 0x00FF
+	return 0
+}
+
+func (cpu *CPU) zpy() uint8 {
+	cpu.addrAbs = uint16(cpu.read(cpu.PC) + cpu.Y)
+	cpu.PC++
+	cpu.addrAbs &= 0x00FF
+	return 0
+}
+
+func (cpu *CPU) rel() uint8 {
+	cpu.addrRel = uint16(cpu.read(cpu.PC))
+	cpu.PC++
+	if cpu.addrRel&0x80 != 0 {
+		cpu.addrRel |= 0xFF00
+	}
+	return 0
+}
+
+func (cpu *CPU) abs() uint8 {
+	var lo uint16 = uint16(cpu.read(cpu.PC))
+	cpu.PC++
+	var hi uint16 = uint16(cpu.read(cpu.PC))
+	cpu.PC++
+
+	cpu.addrAbs = (hi << 8) | lo
+	return 0
+}
+
+func (cpu *CPU) abx() uint8 {
+	var lo uint16 = uint16(cpu.read(cpu.PC))
+	cpu.PC++
+	var hi uint16 = uint16(cpu.read(cpu.PC))
+	cpu.PC++
+
+	cpu.addrAbs = (hi << 8) | lo
+	cpu.addrAbs += uint16(cpu.X)
+
+	// If page change happens, we add an additional cycles
+	// according to the MOS6502 spec. (a caveat)
+	if (cpu.addrAbs & 0xFF00) != (hi << 8) {
+		return 1
+	}
+	return 0
+}
+
+func (cpu *CPU) aby() uint8 {
+	var lo uint16 = uint16(cpu.read(cpu.PC))
+	cpu.PC++
+	var hi uint16 = uint16(cpu.read(cpu.PC))
+	cpu.PC++
+
+	cpu.addrAbs = (hi << 8) | lo
+	cpu.addrAbs += uint16(cpu.Y)
+
+	if (cpu.addrAbs & 0xFF00) != (hi << 8) {
+		return 1
+	}
+	return 0
+}
+
+func (cpu *CPU) ind() uint8 {
+	var ptrLo uint16 = uint16(cpu.read(cpu.PC))
+	cpu.PC++
+	var ptrHi uint16 = uint16(cpu.read(cpu.PC))
+	cpu.PC++
+
+	var ptr uint16 = (ptrHi << 8) | ptrLo
+
+	// Notice that accroding to wiki, there's a page boundary
+	// hardware bug.
+	if ptrLo == 0x00FF {
+		cpu.addrAbs = (uint16(cpu.read(ptr&0xFF00)) << 8) | uint16(cpu.read(ptr+0))
+	} else {
+		cpu.addrAbs = (uint16(cpu.read(ptr+1)) << 8) | uint16(cpu.read(ptr+0))
+	}
+	return 0
+}
+func (cpu *CPU) izx() uint8 {
+	var t uint16 = uint16(cpu.read(cpu.PC))
+	cpu.PC++
+
+	var lo uint16 = uint16(cpu.read(uint16(t+uint16(cpu.X)) & 0x00FF))
+	var hi uint16 = uint16(cpu.read(uint16(t+uint16(t+uint16(cpu.X)+1)) & 0x00FF))
+
+	cpu.addrAbs = (hi << 8) | lo
+
+	return 0
+}
+
+func (cpu *CPU) izy() uint8 {
+	var t uint16 = uint16(cpu.read(cpu.PC))
+	cpu.PC++
+
+	var lo uint16 = uint16(cpu.read(t & 0x00FF))
+	var hi uint16 = uint16(cpu.read((t + 1) & 0x00FF))
+
+	cpu.addrAbs = (hi << 8) | lo
+	cpu.addrAbs += uint16(cpu.Y)
+
+	// We may cross the page boundary so we may need extra
+	// cycles.
+	if (cpu.addrAbs & 0xFF00) != (hi << 8) {
+		return 1
+	}
+	return 0
+}
+
 // Instructions
 func (cpu *CPU) fetch() uint8 {
 	if instructionModes[cpu.opcode] != modeImplied {
@@ -378,10 +427,10 @@ func (cpu *CPU) adc() uint8 {
 	cpu.temp = uint16(cpu.A) + uint16(cpu.fetched) + uint16(cpu.getFlag(flagCarryBit))
 
 	cpu.setFlag(flagCarryBit, cpu.temp > 255)
-	cpu.setFlag(flagZero, (cpu.temp&0x00FF) == 0)
+	cpu.setFlag(flagZero, (cpu.temp&0x00FF) != 0)
 	// V = (A ^ R) & ~(A ^ M)
-	cpu.setFlag(flagOverflow, (^(uint16(cpu.A)^uint16(cpu.fetched))&(uint16(cpu.A)^uint16(cpu.temp)))&0x0080 == 0)
-	cpu.setFlag(flagNegative, cpu.temp&0x80 == 0)
+	cpu.setFlag(flagOverflow, (^(uint16(cpu.A)^uint16(cpu.fetched))&(uint16(cpu.A)^uint16(cpu.temp)))&0x0080 != 0)
+	cpu.setFlag(flagNegative, cpu.temp&0x80 != 0)
 	cpu.A = uint8(cpu.temp & 0x00FF)
 
 	return 1
@@ -393,10 +442,10 @@ func (cpu *CPU) sbc() uint8 {
 	var value uint16 = uint16(cpu.fetched) ^ 0x00FF
 
 	cpu.temp = uint16(cpu.A) + value + uint16(cpu.getFlag(flagCarryBit))
-	cpu.setFlag(flagCarryBit, cpu.temp&0xFF00 == 0)
-	cpu.setFlag(flagZero, cpu.temp&0x00FF == 0)
-	cpu.setFlag(flagOverflow, (cpu.temp^uint16(cpu.A)&(cpu.temp^value)&0x0080) == 0)
-	cpu.setFlag(flagNegative, cpu.temp&0x0080 == 0)
+	cpu.setFlag(flagCarryBit, cpu.temp&0xFF00 != 0)
+	cpu.setFlag(flagZero, cpu.temp&0x00FF != 0)
+	cpu.setFlag(flagOverflow, (cpu.temp^uint16(cpu.A)&(cpu.temp^value)&0x0080) != 0)
+	cpu.setFlag(flagNegative, cpu.temp&0x0080 != 0)
 	cpu.A = uint8(cpu.temp & 0x00FF)
 
 	return 1
@@ -406,7 +455,7 @@ func (cpu *CPU) and() uint8 {
 	cpu.fetch()
 	cpu.A = cpu.A & cpu.fetched
 	cpu.setFlag(flagZero, cpu.A == 0x00)
-	cpu.setFlag(flagNegative, cpu.A&0x80 == 0)
+	cpu.setFlag(flagNegative, cpu.A&0x80 != 0)
 	return 1
 }
 
@@ -415,7 +464,7 @@ func (cpu *CPU) asl() uint8 {
 	cpu.temp = uint16(cpu.fetched) << 1
 	cpu.setFlag(flagCarryBit, (cpu.temp&0xFF00) > 0)
 	cpu.setFlag(flagZero, (cpu.temp&0x00FF) == 0x00)
-	cpu.setFlag(flagNegative, cpu.temp&0x80 == 0)
+	cpu.setFlag(flagNegative, cpu.temp&0x80 != 0)
 
 	if instructionModes[cpu.opcode] == modeImplied {
 		cpu.A = uint8(cpu.temp & 0x00FF)
@@ -473,8 +522,8 @@ func (cpu *CPU) bit() uint8 {
 	cpu.fetch()
 	cpu.temp = uint16(cpu.A & cpu.fetched)
 	cpu.setFlag(flagZero, (cpu.temp&0x00FF) == 0x00)
-	cpu.setFlag(flagNegative, cpu.fetched&(1<<7) == 0)
-	cpu.setFlag(flagOverflow, cpu.fetched&(1<<6) == 0)
+	cpu.setFlag(flagNegative, cpu.fetched&(1<<7) != 0)
+	cpu.setFlag(flagOverflow, cpu.fetched&(1<<6) != 0)
 	return 0
 }
 
@@ -596,7 +645,7 @@ func (cpu *CPU) cmp() uint8 {
 	cpu.temp = uint16(cpu.A) - uint16(cpu.fetched)
 	cpu.setFlag(flagCarryBit, cpu.A >= cpu.fetched)
 	cpu.setFlag(flagZero, (cpu.temp*0x00FF) == 0x0000)
-	cpu.setFlag(flagNegative, cpu.temp&0x0080 == 0)
+	cpu.setFlag(flagNegative, cpu.temp&0x0080 != 0)
 	return 1
 }
 
@@ -605,7 +654,7 @@ func (cpu *CPU) cpx() uint8 {
 	cpu.temp = uint16(cpu.X) - uint16(cpu.fetched)
 	cpu.setFlag(flagCarryBit, cpu.X >= cpu.fetched)
 	cpu.setFlag(flagZero, (cpu.temp&0x00FF) == 0x0000)
-	cpu.setFlag(flagNegative, cpu.temp&0x0080 == 0)
+	cpu.setFlag(flagNegative, cpu.temp&0x0080 != 0)
 	return 0
 }
 
@@ -614,7 +663,7 @@ func (cpu *CPU) cpy() uint8 {
 	cpu.temp = uint16(cpu.Y) - uint16(cpu.fetched)
 	cpu.setFlag(flagCarryBit, cpu.Y >= cpu.fetched)
 	cpu.setFlag(flagZero, (cpu.temp&0x00FF) == 0x0000)
-	cpu.setFlag(flagNegative, cpu.temp&0x0080 == 0)
+	cpu.setFlag(flagNegative, cpu.temp&0x0080 != 0)
 	return 0
 }
 
@@ -623,21 +672,21 @@ func (cpu *CPU) dec() uint8 {
 	cpu.temp = uint16(cpu.fetched - 1)
 	cpu.write(cpu.addrAbs, uint8(cpu.temp&0x00FF))
 	cpu.setFlag(flagZero, (cpu.temp&0x00FF) == 0x0000)
-	cpu.setFlag(flagNegative, cpu.temp&0x0080 == 0)
+	cpu.setFlag(flagNegative, cpu.temp&0x0080 != 0)
 	return 0
 }
 
 func (cpu *CPU) dex() uint8 {
 	cpu.X--
 	cpu.setFlag(flagZero, cpu.X == 0x00)
-	cpu.setFlag(flagNegative, cpu.X&0x80 == 0)
+	cpu.setFlag(flagNegative, cpu.X&0x80 != 0)
 	return 0
 }
 
 func (cpu *CPU) dey() uint8 {
 	cpu.Y--
 	cpu.setFlag(flagZero, cpu.Y == 0x00)
-	cpu.setFlag(flagNegative, cpu.Y&0x80 == 0)
+	cpu.setFlag(flagNegative, cpu.Y&0x80 != 0)
 	return 0
 }
 
@@ -645,7 +694,7 @@ func (cpu *CPU) eor() uint8 {
 	cpu.fetch()
 	cpu.A = cpu.A ^ cpu.fetched
 	cpu.setFlag(flagZero, cpu.A == 0x00)
-	cpu.setFlag(flagNegative, cpu.A&0x80 == 0)
+	cpu.setFlag(flagNegative, cpu.A&0x80 != 0)
 	return 1
 }
 
@@ -654,21 +703,21 @@ func (cpu *CPU) inc() uint8 {
 	cpu.temp = uint16(cpu.fetched + 1)
 	cpu.write(cpu.addrAbs, uint8(cpu.temp&0x00FF))
 	cpu.setFlag(flagZero, (cpu.temp&0x00FF) == 0x0000)
-	cpu.setFlag(flagNegative, cpu.temp&0x0080 == 0)
+	cpu.setFlag(flagNegative, cpu.temp&0x0080 != 0)
 	return 0
 }
 
 func (cpu *CPU) inx() uint8 {
 	cpu.X++
 	cpu.setFlag(flagZero, cpu.X == 0x00)
-	cpu.setFlag(flagNegative, cpu.X&0x80 == 0)
+	cpu.setFlag(flagNegative, cpu.X&0x80 != 0)
 	return 0
 }
 
 func (cpu *CPU) iny() uint8 {
 	cpu.Y++
 	cpu.setFlag(flagZero, cpu.Y == 0x00)
-	cpu.setFlag(flagNegative, cpu.Y&0x80 == 0)
+	cpu.setFlag(flagNegative, cpu.Y&0x80 != 0)
 	return 0
 }
 
@@ -693,7 +742,7 @@ func (cpu *CPU) lda() uint8 {
 	cpu.fetch()
 	cpu.A = cpu.fetched
 	cpu.setFlag(flagZero, cpu.A == 0x00)
-	cpu.setFlag(flagNegative, cpu.A&0x80 == 0)
+	cpu.setFlag(flagNegative, cpu.A&0x80 != 0)
 	return 1
 }
 
@@ -701,23 +750,24 @@ func (cpu *CPU) ldx() uint8 {
 	cpu.fetch()
 	cpu.X = cpu.fetched
 	cpu.setFlag(flagZero, cpu.X == 0x00)
-	cpu.setFlag(flagNegative, cpu.X&0x80 == 0)
+	cpu.setFlag(flagNegative, cpu.X&0x80 != 0)
 	return 1
 }
 
 func (cpu *CPU) ldy() uint8 {
 	cpu.fetch()
+	cpu.Y = cpu.fetched
 	cpu.setFlag(flagZero, cpu.Y == 0x00)
-	cpu.setFlag(flagNegative, cpu.Y&0x80 == 0)
+	cpu.setFlag(flagNegative, cpu.Y&0x80 != 0)
 	return 1
 }
 
 func (cpu *CPU) lsr() uint8 {
 	cpu.fetch()
-	cpu.setFlag(flagCarryBit, cpu.fetched&0x0001 == 0)
+	cpu.setFlag(flagCarryBit, cpu.fetched&0x0001 != 0)
 	cpu.temp = uint16(cpu.fetched) >> 1
 	cpu.setFlag(flagZero, (cpu.temp&0x00FF) == 0x0000)
-	cpu.setFlag(flagNegative, cpu.temp&0x0080 == 0)
+	cpu.setFlag(flagNegative, cpu.temp&0x0080 != 0)
 	if instructionModes[cpu.opcode] == modeImplied {
 		cpu.A = uint8(cpu.temp & 0x00FF)
 	} else {
@@ -744,7 +794,7 @@ func (cpu *CPU) ora() uint8 {
 	cpu.fetch()
 	cpu.A = cpu.A | cpu.fetched
 	cpu.setFlag(flagZero, cpu.A == 0x00)
-	cpu.setFlag(flagNegative, cpu.A&0x80 == 0)
+	cpu.setFlag(flagNegative, cpu.A&0x80 != 0)
 	return 1
 }
 
@@ -766,7 +816,7 @@ func (cpu *CPU) pla() uint8 {
 	cpu.SP++
 	cpu.A = cpu.read(0x0100 + uint16(cpu.SP))
 	cpu.setFlag(flagZero, cpu.A == 0x00)
-	cpu.setFlag(flagNegative, cpu.A&0x80 == 0)
+	cpu.setFlag(flagNegative, cpu.A&0x80 != 0)
 	return 0
 }
 
@@ -780,9 +830,9 @@ func (cpu *CPU) plp() uint8 {
 func (cpu *CPU) rol() uint8 {
 	cpu.fetch()
 	cpu.temp = uint16(uint16(cpu.fetched) << 1)
-	cpu.setFlag(flagCarryBit, cpu.temp&0xFF00 == 0)
+	cpu.setFlag(flagCarryBit, cpu.temp&0xFF00 != 0)
 	cpu.setFlag(flagZero, (cpu.temp&0x00FF) == 0x0000)
-	cpu.setFlag(flagNegative, cpu.temp&0x0080 == 0)
+	cpu.setFlag(flagNegative, cpu.temp&0x0080 != 0)
 	if instructionModes[cpu.opcode] == modeImplied {
 		cpu.A = uint8(cpu.temp & 0x00FF)
 	} else {
@@ -794,9 +844,9 @@ func (cpu *CPU) rol() uint8 {
 func (cpu *CPU) ror() uint8 {
 	cpu.fetch()
 	cpu.temp = uint16(cpu.getFlag(flagCarryBit)<<7 | (cpu.fetched >> 1))
-	cpu.setFlag(flagCarryBit, cpu.fetched&0x01 == 0)
+	cpu.setFlag(flagCarryBit, cpu.fetched&0x01 != 0)
 	cpu.setFlag(flagZero, (cpu.temp&0x00FF) == 0x00)
-	cpu.setFlag(flagNegative, cpu.temp&0x0080 == 0)
+	cpu.setFlag(flagNegative, cpu.temp&0x0080 != 0)
 	if instructionModes[cpu.opcode] == modeImplied {
 		cpu.A = uint8(cpu.temp & 0x00FF)
 	} else {
@@ -861,28 +911,28 @@ func (cpu *CPU) sty() uint8 {
 func (cpu *CPU) tax() uint8 {
 	cpu.X = cpu.A
 	cpu.setFlag(flagZero, cpu.X == 0x00)
-	cpu.setFlag(flagNegative, cpu.X&0x80 == 0)
+	cpu.setFlag(flagNegative, cpu.X&0x80 != 0)
 	return 0
 }
 
 func (cpu *CPU) tay() uint8 {
 	cpu.Y = cpu.A
 	cpu.setFlag(flagZero, cpu.Y == 0x00)
-	cpu.setFlag(flagNegative, cpu.Y&0x80 == 0)
+	cpu.setFlag(flagNegative, cpu.Y&0x80 != 0)
 	return 0
 }
 
 func (cpu *CPU) tsx() uint8 {
 	cpu.X = cpu.SP
 	cpu.setFlag(flagZero, cpu.X == 0x00)
-	cpu.setFlag(flagNegative, cpu.X&0x80 == 0)
+	cpu.setFlag(flagNegative, cpu.X&0x80 != 0)
 	return 0
 }
 
 func (cpu *CPU) txa() uint8 {
 	cpu.A = cpu.X
 	cpu.setFlag(flagZero, cpu.A == 0x00)
-	cpu.setFlag(flagNegative, cpu.A&0x80 == 0)
+	cpu.setFlag(flagNegative, cpu.A&0x80 != 0)
 	return 0
 }
 
@@ -894,7 +944,7 @@ func (cpu *CPU) txs() uint8 {
 func (cpu *CPU) tya() uint8 {
 	cpu.A = cpu.Y
 	cpu.setFlag(flagZero, cpu.A == 0x00)
-	cpu.setFlag(flagNegative, cpu.A&0x80 == 0)
+	cpu.setFlag(flagNegative, cpu.A&0x80 != 0)
 	return 0
 }
 
@@ -999,10 +1049,6 @@ func (cpu *CPU) Disassemble(nStart uint16, nStop uint16) map[uint16]string {
 	var lineAddr uint16 = 0
 
 	for addr <= uint32(nStop) {
-		if addr == 0x8000 {
-			fmt.Println("hit")
-			fmt.Println(instructionNames[162])
-		}
 		lineAddr = uint16(addr)
 
 		sInst := "$" + ConvertToHex(uint16(addr), 4) + ": "
