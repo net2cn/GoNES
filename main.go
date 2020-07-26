@@ -60,7 +60,7 @@ func (demo *demoCPU) drawRAM(x int, y int, nAddr uint16, nRows int, nColumns int
 	for row := 0; row < nRows; row++ {
 		sOffset := "$" + nes.ConvertToHex(nAddr, 4) + ":"
 		for col := 0; col < nColumns; col++ {
-			sOffset += " " + nes.ConvertToHex(uint16(demo.bus.Read(nAddr, true)), 2)
+			sOffset += " " + nes.ConvertToHex(uint16(demo.bus.CPURead(nAddr, true)), 2)
 			nAddr++
 		}
 		demo.drawString(nRAMX, nRAMY, sOffset, &sdl.Color{R: 0, G: 255, B: 0, A: 0})
@@ -208,12 +208,12 @@ func (demo *demoCPU) Construct(width int32, height int32) error {
 	nOffset := 0x8000
 
 	for _, b := range bin {
-		demo.bus.RAM[nOffset] = b
+		demo.bus.CPURAM[nOffset] = b
 		nOffset++
 	}
 
-	demo.bus.RAM[0xFFFC] = 0x00
-	demo.bus.RAM[0xFFFD] = 0x80
+	demo.bus.CPURAM[0xFFFC] = 0x00
+	demo.bus.CPURAM[0xFFFD] = 0x80
 
 	demo.mapASM = demo.bus.CPU.Disassemble(0x0000, 0xFFFF)
 	// Create a collection of keys so that we can iter over.

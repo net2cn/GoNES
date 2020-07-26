@@ -190,11 +190,11 @@ func (cpu *CPU) Reset() {
 // IO
 // Read reads one byte from bus and return a word value.
 func (cpu *CPU) read(addr uint16) uint8 {
-	return cpu.Bus.Read(addr, false)
+	return cpu.Bus.CPURead(addr, false)
 }
 
 func (cpu *CPU) write(addr uint16, data uint8) {
-	cpu.Bus.Write(addr, data)
+	cpu.Bus.CPUWrite(addr, data)
 }
 
 func (cpu *CPU) getFlag(f uint8) uint8 {
@@ -1053,7 +1053,7 @@ func (cpu *CPU) Disassemble(nStart uint16, nStop uint16) map[uint16]string {
 
 		sInst := "$" + ConvertToHex(uint16(addr), 4) + ": "
 
-		opcode := cpu.Bus.Read(uint16(addr))
+		opcode := cpu.Bus.CPURead(uint16(addr))
 		addr++
 		sInst += instructionNames[opcode] + " "
 
@@ -1063,60 +1063,60 @@ func (cpu *CPU) Disassemble(nStart uint16, nStop uint16) map[uint16]string {
 		case modeImplied:
 			sInst += " {IMP}"
 		case modeImmediate:
-			value = cpu.Bus.Read(uint16(addr))
+			value = cpu.Bus.CPURead(uint16(addr))
 			addr++
 			sInst += "#$" + ConvertToHex(uint16(value), 2) + " {IMM}"
 		case modeZeroPage:
-			lo = cpu.Bus.Read(uint16(addr))
+			lo = cpu.Bus.CPURead(uint16(addr))
 			addr++
 			hi = 0x00
 			sInst += "$" + ConvertToHex(uint16(lo), 2) + " {ZP0}"
 		case modeZeroPageX:
-			lo = cpu.Bus.Read(uint16(addr))
+			lo = cpu.Bus.CPURead(uint16(addr))
 			addr++
 			hi = 0x00
 			sInst += "$" + ConvertToHex(uint16(lo), 2) + ", X {ZPX}"
 		case modeZeroPageY:
-			lo = cpu.Bus.Read(uint16(addr))
+			lo = cpu.Bus.CPURead(uint16(addr))
 			addr++
 			hi = 0x00
 			sInst += "$" + ConvertToHex(uint16(lo), 2) + ", Y {ZPY}"
 		case modeIndirectX:
-			lo = cpu.Bus.Read(uint16(addr))
+			lo = cpu.Bus.CPURead(uint16(addr))
 			addr++
 			hi = 0x00
 			sInst += "($" + ConvertToHex(uint16(lo), 2) + "), X {IZX}"
 		case modeIndirectY:
-			lo = cpu.Bus.Read(uint16(addr))
+			lo = cpu.Bus.CPURead(uint16(addr))
 			addr++
 			hi = 0x00
 			sInst += "($" + ConvertToHex(uint16(lo), 2) + "), Y {IZY}"
 		case modeAbsolute:
-			lo = cpu.Bus.Read(uint16(addr))
+			lo = cpu.Bus.CPURead(uint16(addr))
 			addr++
-			hi = cpu.Bus.Read(uint16(addr))
+			hi = cpu.Bus.CPURead(uint16(addr))
 			addr++
 			sInst += "$" + ConvertToHex(uint16(hi)<<8|uint16(lo), 4) + " {ABS}"
 		case modeAbsoluteX:
-			lo = cpu.Bus.Read(uint16(addr))
+			lo = cpu.Bus.CPURead(uint16(addr))
 			addr++
-			hi = cpu.Bus.Read(uint16(addr))
+			hi = cpu.Bus.CPURead(uint16(addr))
 			addr++
 			sInst += "$" + ConvertToHex(uint16(hi)<<8|uint16(lo), 4) + ", X {ABX}"
 		case modeAbsoluteY:
-			lo = cpu.Bus.Read(uint16(addr))
+			lo = cpu.Bus.CPURead(uint16(addr))
 			addr++
-			hi = cpu.Bus.Read(uint16(addr))
+			hi = cpu.Bus.CPURead(uint16(addr))
 			addr++
 			sInst += "$" + ConvertToHex(uint16(hi)<<8|uint16(lo), 4) + ", Y {ABY}"
 		case modeIndirect:
-			lo = cpu.Bus.Read(uint16(addr))
+			lo = cpu.Bus.CPURead(uint16(addr))
 			addr++
-			hi = cpu.Bus.Read(uint16(addr))
+			hi = cpu.Bus.CPURead(uint16(addr))
 			addr++
 			sInst += "($" + ConvertToHex(uint16(hi)<<8|uint16(lo), 4) + ") {IND}"
 		case modeRelative:
-			value = cpu.Bus.Read(uint16(addr))
+			value = cpu.Bus.CPURead(uint16(addr))
 			addr++
 			sInst += "$" + ConvertToHex(uint16(value), 2) + "[$" + ConvertToHex(uint16(addr)+uint16(value), 4) + "] {REL}"
 		}
