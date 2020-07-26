@@ -1,10 +1,8 @@
 package main
 
 import (
-	"encoding/hex"
 	"fmt"
 	"sort"
-	"strings"
 
 	"github.com/net2cn/GoNES/nes"
 
@@ -19,7 +17,9 @@ var fontSize int = 15
 var windowWidth, windowHeight int32 = 680, 480
 
 type demoCPU struct {
-	bus       *nes.Bus
+	bus  *nes.Bus
+	cart *nes.Cartridge
+
 	mapASM    map[uint16]string
 	mapKeys   []int
 	inputLock bool
@@ -177,45 +177,18 @@ func (demo *demoCPU) Construct(width int32, height int32) error {
 		return err
 	}
 
-	// ASM code
-	// this snippet of codes calculates 10 * 3
-	// Redundant codes are for validating if those instructions are
-	// implemented correctly
-	// *=$8000
-	// LDX #10
-	// STX $0000
-	// LDX #3
-	// STX $0001
-	// LDY $0000
-	// LDA #0
-	// CLC
-	// loop
-	// ADC $0001
-	// DEY
-	// BNE loop
-	// STA $0002
-	// NOP
-	// NOP
-	// NOP
-	var binStr string = "A2 0A 8E 00 00 A2 03 8E 01 00 AC 00 00 A9 00 18 6D 01 00 88 D0 FA 8D 02 00 EA EA EA" // binary represent
-	binStr = strings.ReplaceAll(binStr, " ", "")
-
-	bin, err := hex.DecodeString(binStr)
+	// Load cartridge
+	demo.cart, err = nes.NewCartridge("./test/nestest.nes")
 	if err != nil {
-		fmt.Printf("Exception occurred when decoding string.")
+		return err
 	}
 
-	nOffset := 0x8000
+	// Insert cartridge
+	demo.bus.InsertCartridge(demo.cart)
 
-	for _, b := range bin {
-		demo.bus.CPURAM[nOffset] = b
-		nOffset++
-	}
-
-	demo.bus.CPURAM[0xFFFC] = 0x00
-	demo.bus.CPURAM[0xFFFD] = 0x80
-
+	// Disassemble ASM
 	demo.mapASM = demo.bus.CPU.Disassemble(0x0000, 0xFFFF)
+
 	// Create a collection of keys so that we can iter over.
 	demo.mapKeys = make([]int, 0)
 	for k := range demo.mapASM {
@@ -223,7 +196,7 @@ func (demo *demoCPU) Construct(width int32, height int32) error {
 	}
 	sort.Ints(demo.mapKeys)
 
-	demo.bus.CPU.Reset()
+	demo.bus.Reset()
 
 	// Get inputLock ready for user input.
 	demo.inputLock = false
