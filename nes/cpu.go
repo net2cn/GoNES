@@ -85,12 +85,12 @@ var instructionNames = [256]string{
 	"BEQ", "SBC", "XXX", "XXX", "NOP", "SBC", "INC", "XXX", "SED", "SBC", "NOP", "XXX", "NOP", "SBC", "INC", "XXX",
 }
 
-type Instruction struct {
-	name    string
-	operate uint8
-	addr    uint8
-	cycles  uint8
-}
+// type Instruction struct {
+// 	name    string
+// 	operate uint8
+// 	addr    uint8
+// 	cycles  uint8
+// }
 
 // CPU MOS 6502 CPU
 type CPU struct {
@@ -1085,12 +1085,12 @@ func (cpu *CPU) Disassemble(nStart uint16, nStop uint16) map[uint16]string {
 			lo = cpu.Bus.Read(uint16(addr))
 			addr++
 			hi = 0x00
-			sInst += "($" + ConvertToHex(uint16(lo), 2) + ", X) {IZX}"
+			sInst += "($" + ConvertToHex(uint16(lo), 2) + "), X {IZX}"
 		case modeIndirectY:
 			lo = cpu.Bus.Read(uint16(addr))
 			addr++
 			hi = 0x00
-			sInst += "($" + ConvertToHex(uint16(lo), 2) + ", Y) {IZY}"
+			sInst += "($" + ConvertToHex(uint16(lo), 2) + "), Y {IZY}"
 		case modeAbsolute:
 			lo = cpu.Bus.Read(uint16(addr))
 			addr++

@@ -63,14 +63,14 @@ func (demo *demoCPU) drawRAM(x int, y int, nAddr uint16, nRows int, nColumns int
 			sOffset += " " + nes.ConvertToHex(uint16(demo.bus.Read(nAddr, true)), 2)
 			nAddr++
 		}
-		demo.drawString(nRAMX, nRAMY, sOffset, &sdl.Color{0, 255, 0, 0})
+		demo.drawString(nRAMX, nRAMY, sOffset, &sdl.Color{R: 0, G: 255, B: 0, A: 0})
 		nRAMY += 10
 	}
 }
 
 // Draw CPU's internal state.
 func (demo *demoCPU) drawCPU(x int, y int) {
-	var color *sdl.Color = &sdl.Color{0, 255, 0, 0}
+	var color *sdl.Color = &sdl.Color{R: 0, G: 255, B: 0, A: 0}
 	demo.drawString(x, y, "STATUS:", color)
 	demo.drawString(x+64, y, "C", demo.getFlagColor(demo.bus.CPU.Status&(1<<0)))
 	demo.drawString(x+80, y, "Z", demo.getFlagColor(demo.bus.CPU.Status&(1<<1)))
@@ -81,9 +81,10 @@ func (demo *demoCPU) drawCPU(x int, y int) {
 	demo.drawString(x+160, y, "O", demo.getFlagColor(demo.bus.CPU.Status&(1<<6)))
 	demo.drawString(x+178, y, "N", demo.getFlagColor(demo.bus.CPU.Status&(1<<7)))
 	demo.drawString(x, y+10, "PC: $"+nes.ConvertToHex(demo.bus.CPU.PC, 4), color)
-	demo.drawString(x, y+20, "A:  $"+nes.ConvertToHex(uint16(demo.bus.CPU.A), 2), color)
-	demo.drawString(x, y+30, "X:  $"+nes.ConvertToHex(uint16(demo.bus.CPU.X), 2), color)
-	demo.drawString(x, y+40, "Y:  $"+nes.ConvertToHex(uint16(demo.bus.CPU.Y), 2), color)
+	// It looks really sucks.
+	demo.drawString(x, y+20, "A:  $"+nes.ConvertToHex(uint16(demo.bus.CPU.A), 2)+" ["+nes.ConvertUint8ToString(demo.bus.CPU.A)+"]", color)
+	demo.drawString(x, y+30, "X:  $"+nes.ConvertToHex(uint16(demo.bus.CPU.X), 2)+" ["+nes.ConvertUint8ToString(demo.bus.CPU.X)+"]", color)
+	demo.drawString(x, y+40, "Y:  $"+nes.ConvertToHex(uint16(demo.bus.CPU.Y), 2)+" ["+nes.ConvertUint8ToString(demo.bus.CPU.Y)+"]", color)
 	demo.drawString(x, y+50, "SP: $"+nes.ConvertToHex(uint16(demo.bus.CPU.SP), 4), color)
 }
 
@@ -94,25 +95,25 @@ func (demo *demoCPU) drawASM(x int, y int, nLines int) {
 	var nLineY int = (nLines>>1)*10 + y
 	var idx int = sort.SearchInts(demo.mapKeys, int(demo.bus.CPU.PC))
 	if itA != demo.mapASM[uint16(demo.mapKeys[len(demo.mapKeys)-1])] {
-		demo.drawString(x, nLineY, itA, &sdl.Color{255, 255, 0, 0})
+		demo.drawString(x, nLineY, itA, &sdl.Color{R: 255, G: 255, B: 0, A: 0})
 		for nLineY < (nLines*10)+y {
 			nLineY += 10
 			idx++
 			if idx != len(demo.mapKeys)-1 {
-				demo.drawString(x, nLineY, demo.mapASM[uint16(demo.mapKeys[idx])], &sdl.Color{0, 255, 0, 0})
+				demo.drawString(x, nLineY, demo.mapASM[uint16(demo.mapKeys[idx])], &sdl.Color{R: 0, G: 255, B: 0, A: 0})
 			}
 		}
 	}
 	idx = sort.SearchInts(demo.mapKeys, int(demo.bus.CPU.PC))
 	nLineY = (nLines>>1)*10 + y
 	if itA != demo.mapASM[uint16(demo.mapKeys[len(demo.mapKeys)-1])] {
-		demo.drawString(x, nLineY, itA, &sdl.Color{255, 255, 0, 0})
+		demo.drawString(x, nLineY, itA, &sdl.Color{R: 255, G: 255, B: 0, A: 0})
 		for nLineY > y {
 			nLineY -= 10
 			idx--
 			// Check if our index is out of range since we're subtracting it.
 			if idx != len(demo.mapKeys)-1 && idx > 0 {
-				demo.drawString(x, nLineY, demo.mapASM[uint16(demo.mapKeys[idx])], &sdl.Color{0, 255, 0, 0})
+				demo.drawString(x, nLineY, demo.mapASM[uint16(demo.mapKeys[idx])], &sdl.Color{R: 0, G: 255, B: 0, A: 0})
 			}
 		}
 	}
@@ -121,9 +122,9 @@ func (demo *demoCPU) drawASM(x int, y int, nLines int) {
 // Test what color should we use based on flag's state.
 func (demo *demoCPU) getFlagColor(flag uint8) *sdl.Color {
 	if flag == 0 {
-		return &sdl.Color{0, 255, 0, 0}
+		return &sdl.Color{R: 0, G: 255, B: 0, A: 0}
 	}
-	return &sdl.Color{255, 0, 0, 0}
+	return &sdl.Color{R: 255, G: 0, B: 0, A: 0}
 }
 
 // Construct our demo.
@@ -177,6 +178,9 @@ func (demo *demoCPU) Construct(width int32, height int32) error {
 	}
 
 	// ASM code
+	// this snippet of codes calculates 10 * 3
+	// Redundant codes are for validating if those instructions are
+	// implemented correctly
 	// *=$8000
 	// LDX #10
 	// STX $0000
@@ -272,11 +276,11 @@ func (demo *demoCPU) Update() bool {
 	demo.drawRAM(2, 182, 0x8000, 16, 16)
 	demo.drawCPU(448, 2)
 	demo.drawASM(448, 72, 26)
-	demo.drawString(2, 362, "SPACE - step one, R - reset, I - IRQ, N - NMI", &sdl.Color{0, 255, 0, 0})
+	demo.drawString(2, 362, "SPACE - step one, R - reset, I - IRQ, N - NMI", &sdl.Color{R: 0, G: 255, B: 0, A: 0})
 
 	// Swap buffer and present our rendered content.
 	demo.buffer.Blit(nil, demo.surface, nil)
-	demo.buffer.FillRect(nil, 0)
+	demo.buffer.FillRect(nil, 0xFF000000)
 
 	return true
 }
