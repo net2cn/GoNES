@@ -1,6 +1,11 @@
 package nes
 
-import "github.com/veandco/go-sdl2/sdl"
+import (
+	"fmt"
+	"math/rand"
+
+	"github.com/veandco/go-sdl2/sdl"
+)
 
 type PPU struct {
 	cartridge *Cartridge
@@ -9,25 +14,120 @@ type PPU struct {
 	tableName    [2][1024]uint8
 	tablePalette [32]uint8
 
+	window             *sdl.Window
 	renderer           *sdl.Renderer
-	palette            [0x40]*sdl.Color
-	spriteSurface      *sdl.Texture
-	spriteNameTable    [2]*sdl.Texture
-	spritePatternTable [2]*sdl.Texture
+	palette            [][]uint8
+	sprite             *sdl.Texture
+	spriteNameTable    []*sdl.Texture
+	spritePatternTable []*sdl.Texture
 
 	FrameComplete bool
 
-	scanline int16 // Row on screen
-	cycle    int16 // Column on screen
+	scanline int32 // Row on screen
+	cycle    int32 // Column on screen
 }
 
-func ConnectPPU(bus *Bus) *PPU {
+func ConnectPPU(bus *Bus, window *sdl.Window) *PPU {
+	var err error
 	ppu := PPU{}
-	
-	
+	ppu.window = window
 
-	ppu.renderer.SetRenderTarget(ppu.spriteSurface)
+	// Create PPU internal renderer
+	ppu.renderer, err = ppu.window.GetRenderer()
+	if err != nil {
+		fmt.Printf("Failed to get renderer for PPU internal debug renderer: %s\n", err)
+		panic(err)
+	}
+
+	// Initialize PPU palette
+	ppu.palette = ppu.initializePalette()
+
+	// Initialize PPU spritesheet
+	ppu.sprite = new(sdl.Texture)
+
+	// Initialize PPU sprite name table
+	ppu.spriteNameTable = make([]*sdl.Texture, 2)
+
+	// Initialize PPU sprite pattern table
+	ppu.spritePatternTable = make([]*sdl.Texture, 2)
+	for i := range ppu.spritePatternTable {
+		ppu.spritePatternTable[i] = new(sdl.Texture)
+	}
+
+	// To prevent draw on window.
+	ppu.renderer.SetRenderTarget(ppu.sprite)
+
 	return &ppu
+}
+
+func (ppu *PPU) initializePalette() [][]uint8 {
+	return [][]uint8{{84, 84, 84, 0},
+		{0, 30, 116, 0},
+		{8, 16, 144, 0},
+		{48, 0, 136, 0},
+		{68, 0, 100, 0},
+		{92, 0, 48, 0},
+		{84, 4, 0, 0},
+		{60, 24, 0, 0},
+		{32, 42, 0, 0},
+		{8, 58, 0, 0},
+		{0, 64, 0, 0},
+		{0, 60, 0, 0},
+		{0, 50, 60, 0},
+		{0, 0, 0, 0},
+		{0, 0, 0, 0},
+		{0, 0, 0, 0},
+
+		{152, 150, 152, 0},
+		{8, 76, 196, 0},
+		{48, 50, 236, 0},
+		{92, 30, 228, 0},
+		{136, 20, 176, 0},
+		{160, 20, 100, 0},
+		{152, 34, 32, 0},
+		{120, 60, 0, 0},
+		{84, 90, 0, 0},
+		{40, 114, 0, 0},
+		{8, 124, 0, 0},
+		{0, 118, 40, 0},
+		{0, 102, 120, 0},
+		{0, 0, 0, 0},
+		{0, 0, 0, 0},
+		{0, 0, 0, 0},
+
+		{236, 238, 236, 0},
+		{76, 154, 236, 0},
+		{120, 124, 236, 0},
+		{176, 98, 236, 0},
+		{228, 84, 236, 0},
+		{236, 88, 180, 0},
+		{236, 106, 100, 0},
+		{212, 136, 32, 0},
+		{160, 170, 0, 0},
+		{116, 196, 0, 0},
+		{76, 208, 32, 0},
+		{56, 204, 108, 0},
+		{56, 180, 204, 0},
+		{60, 60, 60, 0},
+		{0, 0, 0, 0},
+		{0, 0, 0, 0},
+
+		{236, 238, 236, 0},
+		{168, 204, 236, 0},
+		{188, 188, 236, 0},
+		{212, 178, 236, 0},
+		{236, 174, 236, 0},
+		{236, 174, 212, 0},
+		{236, 180, 176, 0},
+		{228, 196, 144, 0},
+		{204, 210, 120, 0},
+		{180, 222, 120, 0},
+		{168, 226, 144, 0},
+		{152, 226, 180, 0},
+		{160, 214, 228, 0},
+		{160, 162, 160, 0},
+		{0, 0, 0, 0},
+		{0, 0, 0, 0}}
 }
 
 // CPU IO
@@ -108,7 +208,18 @@ func (ppu *PPU) ConnectCartridge(cart *Cartridge) {
 }
 
 func (ppu *PPU) Clock() {
-
+	var color []uint8
+	originTarget := ppu.renderer.GetRenderTarget()
+	// Draw old-fashioned static noise.
+	ppu.renderer.SetRenderTarget(ppu.sprite)
+	if rand.Int()%2 != 0 {
+		color = ppu.palette[0x3F]
+		ppu.renderer.SetDrawColor(color[0], color[1], color[2], color[3])
+	} else {
+		color = ppu.palette[0x30]
+		ppu.renderer.SetDrawColor(color[0], color[1], color[2], color[3])
+	}
+	ppu.renderer.DrawPoint(ppu.cycle-1, ppu.scanline)
 
 	// Advance renderer, it's relentless and it never stops.
 	ppu.cycle++
@@ -120,12 +231,13 @@ func (ppu *PPU) Clock() {
 			ppu.FrameComplete = true
 		}
 	}
+	ppu.renderer.SetRenderTarget(originTarget)
 }
 
 // Debug utilities
 
-func (ppu *PPU) GetSurface() *sdl.Texture {
-	return ppu.spriteSurface
+func (ppu *PPU) GetSprite() *sdl.Texture {
+	return ppu.sprite
 }
 
 func (ppu *PPU) GetNameTable(i uint8) *sdl.Texture {

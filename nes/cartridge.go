@@ -94,7 +94,7 @@ func NewCartridge(filePath string) (*Cartridge, error) {
 func (cart *Cartridge) CPURead(addr uint16, data *uint8) bool {
 	var mappedAddr uint32 = 0
 	if cart.mapper.CPUMapRead(addr, &mappedAddr) {
-		data = &cart.prgMemory[mappedAddr]
+		*data = cart.prgMemory[mappedAddr]
 		return true
 	}
 
@@ -116,7 +116,7 @@ func (cart *Cartridge) CPUWrite(addr uint16, data uint8) bool {
 func (cart *Cartridge) PPURead(addr uint16, data *uint8) bool {
 	var mappedAddr uint32 = 0
 	if cart.mapper.PPUMapRead(addr, &mappedAddr) {
-		data = &cart.chrMemory[mappedAddr]
+		*data = cart.chrMemory[mappedAddr]
 		return true
 	}
 

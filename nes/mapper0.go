@@ -17,10 +17,10 @@ func (mapper *Mapper0) CPUMapRead(addr uint16, mappedAddr *uint32) bool {
 	if addr >= 0x8000 && addr <= 0xFFFF {
 		if mapper.prgBanks > 1 {
 			tmp = uint32(addr & 0x7FFF)
-			mappedAddr = &tmp
+			*mappedAddr = tmp
 		} else {
 			tmp = uint32(addr & 0x3FFF)
-			mappedAddr = &tmp
+			*mappedAddr = tmp
 		}
 		return true
 	}

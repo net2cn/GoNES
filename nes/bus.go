@@ -1,5 +1,7 @@
 package nes
 
+import "github.com/veandco/go-sdl2/sdl"
+
 // Bus The main bus of a NES.
 type Bus struct {
 	CPU       *CPU
@@ -11,14 +13,14 @@ type Bus struct {
 }
 
 // NewBus Create a NES main bus with device attached to it.
-func NewBus() *Bus {
+func NewBus(window *sdl.Window) *Bus {
 	// Init RAM space.
 	ram := make([]uint8, 64*1024)
 	bus := Bus{nil, ram, nil, nil, 0}
 
 	// Connect CPU to bus
 	bus.CPU = ConnectCPU(&bus)
-	bus.PPU = ConnectPPU(&bus)
+	bus.PPU = ConnectPPU(&bus, window)
 	return &bus
 }
 
@@ -32,7 +34,7 @@ func (bus *Bus) CPURead(addr uint16, readOnly ...bool) uint8 {
 	}
 
 	if bus.cartridge.CPURead(addr, &data) {
-
+		// Cartridge address range
 	} else if addr >= 0x0000 && addr <= 0x1FFF {
 		data = bus.CPURAM[addr&0x07FF] // addr&0x07FF yields back the geniune value after mirroring
 	} else if addr >= 0x2000 && addr <= 0x3FFF {
@@ -65,5 +67,9 @@ func (bus *Bus) Reset() {
 }
 
 func (bus *Bus) Clock() {
-
+	bus.PPU.Clock()
+	if bus.systemClockCounter%3 == 0 {
+		bus.CPU.Clock()
+	}
+	bus.systemClockCounter++
 }

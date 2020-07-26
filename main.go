@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"sort"
+	"time"
 
 	"github.com/net2cn/GoNES/nes"
 
@@ -19,6 +20,9 @@ var windowWidth, windowHeight int32 = 680, 480
 type demoCPU struct {
 	bus  *nes.Bus
 	cart *nes.Cartridge
+
+	emulationRun bool
+	residualTime float32
 
 	mapASM    map[uint16]string
 	mapKeys   []int
@@ -127,29 +131,32 @@ func (demo *demoCPU) getFlagColor(flag uint8) *sdl.Color {
 	return &sdl.Color{R: 255, G: 0, B: 0, A: 0}
 }
 
+func (demo *demoCPU) drawSprite(x int, y int, sprite *sdl.Texture) {
+	src := sdl.Rect{0, 0, windowWidth, windowHeight}
+	demo.renderer.Copy(sprite, &src, &src)
+	demo.renderer.Present()
+}
+
 // Construct our demo.
 func (demo *demoCPU) Construct(width int32, height int32) error {
 	var err error
 
-	// Init our NES.
-	demo.bus = nes.NewBus()
-
 	// Init sdl2
 	if err = sdl.Init(sdl.INIT_VIDEO); err != nil {
 		fmt.Printf("Failed to init sdl2: %s\n", err)
-		return err
+		panic(err)
 	}
 
 	// Initialize font
 	if err = ttf.Init(); err != nil {
 		fmt.Printf("Failed to init font: %s\n", err)
-		return err
+		panic(err)
 	}
 
 	// Load the font for our text
 	if demo.font, err = ttf.OpenFont(fontPath, fontSize); err != nil {
 		fmt.Printf("Failed to load font: %s\n", err)
-		return err
+		panic(err)
 	}
 
 	// Create window
@@ -157,13 +164,13 @@ func (demo *demoCPU) Construct(width int32, height int32) error {
 		width, height, sdl.WINDOW_SHOWN)
 	if err != nil {
 		fmt.Printf("Failed to create window: %s\n", err)
-		return err
+		panic(err)
 	}
 
 	// Create draw surface and draw buffer
 	if demo.surface, err = demo.window.GetSurface(); err != nil {
 		fmt.Printf("Failed to get window surface: %s\n", err)
-		return err
+		panic(err)
 	}
 
 	if demo.buffer, err = demo.surface.Convert(demo.surface.Format, demo.window.GetFlags()); err != nil {
@@ -174,14 +181,20 @@ func (demo *demoCPU) Construct(width int32, height int32) error {
 	demo.renderer, err = sdl.CreateRenderer(demo.window, -1, sdl.RENDERER_ACCELERATED)
 	if err != nil {
 		fmt.Printf("Failed to create renderer: %s\n", err)
-		return err
+		panic(err)
 	}
+
+	// Init our NES.
+	demo.bus = nes.NewBus(demo.window)
 
 	// Load cartridge
 	demo.cart, err = nes.NewCartridge("./test/nestest.nes")
 	if err != nil {
 		return err
 	}
+
+	demo.emulationRun = false
+	demo.residualTime = 0.0
 
 	// Insert cartridge
 	demo.bus.InsertCartridge(demo.cart)
@@ -204,64 +217,91 @@ func (demo *demoCPU) Construct(width int32, height int32) error {
 	return nil
 }
 
-func (demo *demoCPU) Update() bool {
+func (demo *demoCPU) Update(elapsedTime float32) bool {
 	// Using double buffering technique to prevent flickering.
 
 	//Get user inputs.
-	// I should probably split out this part and make this looks neater.
-	for event := sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
-		switch t := event.(type) {
-		case *sdl.QuitEvent:
-			return false
-		case *sdl.KeyboardEvent:
-			if !demo.inputLock {
-				switch t.Keysym.Sym {
-				case sdl.K_SPACE:
-					// Golang's do while.
-					for done := true; done; done = demo.bus.CPU.Complete() != true {
-						demo.bus.CPU.Clock()
+	if demo.emulationRun {
+		if demo.residualTime > 0.0 {
+			demo.residualTime -= elapsedTime
+		} else {
+			demo.residualTime += 1.0/60.0 - elapsedTime
+			// Golang's do while.
+			for done := true; done; done = demo.bus.PPU.FrameComplete != true {
+				demo.bus.Clock()
+			}
+			demo.bus.PPU.FrameComplete = false
+		}
+	} else {
+		for event := sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
+			switch t := event.(type) {
+			case *sdl.QuitEvent:
+				return false
+			case *sdl.KeyboardEvent:
+				if !demo.inputLock {
+					switch t.Keysym.Sym {
+					case sdl.K_c:
+						// Golang's do while.
+						for done := true; done; done = demo.bus.CPU.Complete() != true {
+							demo.bus.Clock()
+						}
+						for done := true; done; done = demo.bus.CPU.Complete() == true {
+							demo.bus.Clock()
+						}
+					case sdl.K_f:
+						for done := true; done; done = demo.bus.PPU.FrameComplete != true {
+							demo.bus.Clock()
+						}
+						for done := true; done; done = demo.bus.CPU.Complete() != true {
+							demo.bus.Clock()
+						}
+						demo.bus.PPU.FrameComplete = false
+					case sdl.K_SPACE:
+						demo.emulationRun = !demo.emulationRun
+					case sdl.K_r:
+						demo.bus.CPU.Reset()
 					}
-				case sdl.K_r:
-					demo.bus.CPU.Reset()
-				case sdl.K_i:
-					demo.bus.CPU.Irq()
-				case sdl.K_n:
-					demo.bus.CPU.Nmi()
 				}
-			}
 
-			// Anti-jittering
-			if t.Repeat > 0 {
-				demo.inputLock = false
-			} else {
-				if t.State == sdl.RELEASED {
+				// Anti-jittering
+				if t.Repeat > 0 {
 					demo.inputLock = false
-				} else if t.State == sdl.PRESSED {
-					demo.inputLock = true
+				} else {
+					if t.State == sdl.RELEASED {
+						demo.inputLock = false
+					} else if t.State == sdl.PRESSED {
+						demo.inputLock = true
+					}
 				}
-			}
 
+			}
 		}
 	}
 
 	// Render stuffs.
-	demo.drawRAM(2, 2, 0x0000, 16, 16)
-	demo.drawRAM(2, 182, 0x8000, 16, 16)
-	demo.drawCPU(448, 2)
-	demo.drawASM(448, 72, 26)
+	demo.drawCPU(516, 2)
+	demo.drawASM(516, 72, 26)
+	demo.drawSprite(0, 0, demo.bus.PPU.GetSprite())
 	demo.drawString(2, 362, "SPACE - step one, R - reset, I - IRQ, N - NMI", &sdl.Color{R: 0, G: 255, B: 0, A: 0})
 
 	// Swap buffer and present our rendered content.
 	demo.buffer.Blit(nil, demo.surface, nil)
 	demo.buffer.FillRect(nil, 0xFF000000)
+	demo.renderer.Clear()
 
 	return true
 }
 
 func (demo *demoCPU) Start() {
+	startTime := time.Now()
+	endTime := time.Now()
+
 	running := true
 	for running {
-		running = demo.Update()
+		startTime = time.Now()
+		elapsedTime := float32(startTime.Sub(endTime).Milliseconds()) / 1000
+		running = demo.Update(elapsedTime)
+		endTime = time.Now()
 		sdl.Delay(16)
 	}
 
