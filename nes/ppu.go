@@ -2,6 +2,7 @@ package nes
 
 import (
 	"fmt"
+	"image/color"
 	"math/rand"
 
 	"github.com/veandco/go-sdl2/sdl"
@@ -14,12 +15,11 @@ type PPU struct {
 	tableName    [2][1024]uint8
 	tablePalette [32]uint8
 
-	window             *sdl.Window
-	renderer           *sdl.Renderer
+	surface            *sdl.Surface
 	palette            [][]uint8
-	sprite             *sdl.Texture
-	spriteNameTable    []*sdl.Texture
-	spritePatternTable []*sdl.Texture
+	sprite             *sdl.Surface
+	spriteNameTable    []*sdl.Surface
+	spritePatternTable []*sdl.Surface
 
 	FrameComplete bool
 
@@ -27,35 +27,28 @@ type PPU struct {
 	cycle    int32 // Column on screen
 }
 
-func ConnectPPU(bus *Bus, window *sdl.Window) *PPU {
+func ConnectPPU(bus *Bus) *PPU {
 	var err error
 	ppu := PPU{}
-	ppu.window = window
 
-	// Create PPU internal renderer
-	ppu.renderer, err = ppu.window.GetRenderer()
+	// Initialize PPU spritesheet
+	ppu.surface, err = sdl.CreateRGBSurfaceWithFormat(0, 256*2, 240*2, 8, sdl.PIXELFORMAT_RGBA8888)
 	if err != nil {
-		fmt.Printf("Failed to get renderer for PPU internal debug renderer: %s\n", err)
+		fmt.Printf("Failed to create sprite: %s\n", err)
 		panic(err)
 	}
 
 	// Initialize PPU palette
 	ppu.palette = ppu.initializePalette()
 
-	// Initialize PPU spritesheet
-	ppu.sprite = new(sdl.Texture)
+	// // Initialize PPU sprite name table
+	// ppu.spriteNameTable = make([]*sdl.Texture, 2)
 
-	// Initialize PPU sprite name table
-	ppu.spriteNameTable = make([]*sdl.Texture, 2)
-
-	// Initialize PPU sprite pattern table
-	ppu.spritePatternTable = make([]*sdl.Texture, 2)
-	for i := range ppu.spritePatternTable {
-		ppu.spritePatternTable[i] = new(sdl.Texture)
-	}
-
-	// To prevent draw on window.
-	ppu.renderer.SetRenderTarget(ppu.sprite)
+	// // Initialize PPU sprite pattern table
+	// ppu.spritePatternTable = make([]*sdl.Texture, 2)
+	// for i := range ppu.spritePatternTable {
+	// 	ppu.spritePatternTable[i] = new(sdl.Texture)
+	// }
 
 	return &ppu
 }
@@ -208,18 +201,15 @@ func (ppu *PPU) ConnectCartridge(cart *Cartridge) {
 }
 
 func (ppu *PPU) Clock() {
-	var color []uint8
-	originTarget := ppu.renderer.GetRenderTarget()
+	var pixelColor []uint8
 	// Draw old-fashioned static noise.
-	ppu.renderer.SetRenderTarget(ppu.sprite)
 	if rand.Int()%2 != 0 {
-		color = ppu.palette[0x3F]
-		ppu.renderer.SetDrawColor(color[0], color[1], color[2], color[3])
+		pixelColor = ppu.palette[0x3F]
 	} else {
-		color = ppu.palette[0x30]
-		ppu.renderer.SetDrawColor(color[0], color[1], color[2], color[3])
+		pixelColor = ppu.palette[0x30]
 	}
-	ppu.renderer.DrawPoint(ppu.cycle-1, ppu.scanline)
+
+	ppu.surface.Set(int(ppu.cycle-1+1), int(ppu.scanline+1), color.RGBA{pixelColor[0], pixelColor[1], pixelColor[2], pixelColor[3]})
 
 	// Advance renderer, it's relentless and it never stops.
 	ppu.cycle++
@@ -231,19 +221,18 @@ func (ppu *PPU) Clock() {
 			ppu.FrameComplete = true
 		}
 	}
-	ppu.renderer.SetRenderTarget(originTarget)
 }
 
 // Debug utilities
 
-func (ppu *PPU) GetSprite() *sdl.Texture {
+func (ppu *PPU) GetSprite() *sdl.Surface {
 	return ppu.sprite
 }
 
-func (ppu *PPU) GetNameTable(i uint8) *sdl.Texture {
+func (ppu *PPU) GetNameTable(i uint8) *sdl.Surface {
 	return ppu.spriteNameTable[i]
 }
 
-func (ppu *PPU) GetPatternTable(i uint8) *sdl.Texture {
+func (ppu *PPU) GetPatternTable(i uint8) *sdl.Surface {
 	return ppu.spritePatternTable[i]
 }
