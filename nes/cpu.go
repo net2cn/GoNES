@@ -1118,7 +1118,7 @@ func (cpu *CPU) Disassemble(nStart uint16, nStop uint16) map[uint16]string {
 		case modeRelative:
 			value = cpu.Bus.CPURead(uint16(addr))
 			addr++
-			sInst += "$" + ConvertToHex(uint16(value), 2) + "[$" + ConvertToHex(uint16(addr)+uint16(value), 4) + "] {REL}"
+			sInst += "$" + ConvertToHex(uint16(value), 2) + "[$" + ConvertToHex(uint16(addr+uint32(int8(value))), 4) + "] {REL}" // Make value signed to have a correct relative address
 		}
 		mapLines[lineAddr] = sInst
 	}
