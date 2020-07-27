@@ -13,9 +13,9 @@ type PPU struct {
 
 	// PPU RAM
 	tableName    [2][1024]uint8
+	tablePattern [2][4096]uint8
 	tablePalette [32]uint8
 
-	surface            *sdl.Surface
 	palette            [][]uint8
 	sprite             *sdl.Surface
 	spriteNameTable    []*sdl.Surface
@@ -32,7 +32,7 @@ func ConnectPPU(bus *Bus) *PPU {
 	ppu := PPU{}
 
 	// Initialize PPU spritesheet
-	ppu.surface, err = sdl.CreateRGBSurfaceWithFormat(0, 256*2, 240*2, 8, sdl.PIXELFORMAT_RGBA8888)
+	ppu.sprite, err = sdl.CreateRGBSurfaceWithFormat(0, 256*2, 240*2, 8, sdl.PIXELFORMAT_RGB888)
 	if err != nil {
 		fmt.Printf("Failed to create sprite: %s\n", err)
 		panic(err)
@@ -209,7 +209,7 @@ func (ppu *PPU) Clock() {
 		pixelColor = ppu.palette[0x30]
 	}
 
-	ppu.surface.Set(int(ppu.cycle-1+1), int(ppu.scanline+1), color.RGBA{pixelColor[0], pixelColor[1], pixelColor[2], pixelColor[3]})
+	ppu.sprite.Set(int(ppu.cycle-1+1), int(ppu.scanline+1), color.RGBA{pixelColor[0], pixelColor[1], pixelColor[2], pixelColor[3]})
 
 	// Advance renderer, it's relentless and it never stops.
 	ppu.cycle++

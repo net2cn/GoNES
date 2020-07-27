@@ -1,7 +1,9 @@
 package nes
 
 import (
+	"fmt"
 	_ "fmt" // Remember to remove the blank identifier here.
+	"os"
 	"strconv"
 	"strings"
 )
@@ -22,4 +24,16 @@ func ConvertToHex(n uint16, d uint8) string {
 		s = replaceAtIndex(s, "0123456789ABCDEF"[n&0xF], i)
 	}
 	return s
+}
+
+func IsPathExists(path string) bool {
+	_, err := os.Stat(path)
+	if err == nil {
+		return true
+	}
+	if os.IsNotExist(err) {
+		return false
+	}
+	fmt.Printf("Exception has occurred in IsPahtExists(): %s", err)
+	return false
 }

@@ -2,11 +2,13 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"sort"
 	"time"
 
 	"github.com/net2cn/GoNES/nes"
 
+	"github.com/veandco/go-sdl2/img"
 	"github.com/veandco/go-sdl2/sdl"
 	"github.com/veandco/go-sdl2/ttf"
 )
@@ -232,6 +234,7 @@ func (demo *demoCPU) Update(elapsedTime int64) bool {
 			demo.bus.PPU.FrameComplete = false
 		}
 	}
+
 	for event := sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
 		switch t := event.(type) {
 		case *sdl.QuitEvent:
@@ -259,6 +262,11 @@ func (demo *demoCPU) Update(elapsedTime int64) bool {
 					demo.emulationRun = !demo.emulationRun
 				case sdl.K_r:
 					demo.bus.CPU.Reset()
+				case sdl.K_d:
+					if !nes.IsPathExists("./debug") {
+						os.Mkdir("debug", os.ModePerm)
+					}
+					img.SavePNG(demo.bus.PPU.GetSprite(), "./debug/sprite.png")
 				}
 			}
 
@@ -279,9 +287,13 @@ func (demo *demoCPU) Update(elapsedTime int64) bool {
 
 	// Render stuffs.
 	demo.drawSprite(0, 0, demo.bus.PPU.GetSprite())
-	demo.drawCPU(516, 2)
-	demo.drawASM(516, 72, 26)
-	demo.drawString(2, 362, "SPACE - step one, R - reset, I - IRQ, N - NMI", &sdl.Color{R: 0, G: 255, B: 0, A: 0})
+	demo.drawCPU(464, 2)
+	demo.drawASM(464, 72, 26)
+	demo.drawString(464, 362, "SPACE - Run/stop", &sdl.Color{R: 0, G: 255, B: 0, A: 0})
+	demo.drawString(464, 372, "R - Reset", &sdl.Color{R: 0, G: 255, B: 0, A: 0})
+	demo.drawString(464, 382, "F - Step one frame", &sdl.Color{R: 0, G: 255, B: 0, A: 0})
+	demo.drawString(464, 392, "C - Step one instruction", &sdl.Color{R: 0, G: 255, B: 0, A: 0})
+	demo.drawString(464, 402, "D - Dump sprite", &sdl.Color{R: 0, G: 255, B: 0, A: 0})
 
 	// Swap buffer and present our rendered content.
 	demo.window.UpdateSurface()
