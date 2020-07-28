@@ -272,7 +272,7 @@ func (demo *demoCPU) Update(elapsedTime int64) bool {
 					if !nes.IsPathExists("./debug") {
 						os.Mkdir("debug", os.ModePerm)
 					}
-					img.SavePNG(demo.bus.PPU.GetPatternTable(0, demo.selectedPalette), "./debug/sprite.png")
+					img.SavePNG(demo.bus.PPU.GetScreen(), "./debug/sprite.png")
 				}
 			}
 
@@ -293,10 +293,13 @@ func (demo *demoCPU) Update(elapsedTime int64) bool {
 
 	// Render stuffs.
 	// Always remember to draw on buffer.
+
+	// Draw screen, sprites.
 	demo.drawSprite(0, 0, demo.bus.PPU.GetScreen())
 	demo.drawSprite(416, 348, demo.bus.PPU.GetPatternTable(0, demo.selectedPalette))
 	demo.drawSprite(416+132, 348, demo.bus.PPU.GetPatternTable(1, demo.selectedPalette))
 
+	// Draw selected palettes border.
 	switchSize := 6
 	demo.buffer.FillRect(
 		&sdl.Rect{X: int32(419 + int(demo.selectedPalette)*(switchSize*5) - 3),
@@ -305,6 +308,7 @@ func (demo *demoCPU) Update(elapsedTime int64) bool {
 			H: int32(switchSize * 2)},
 		0x00FFFF00,
 	)
+	// Draw palettes.
 	for p := 0; p < 8; p++ {
 		for s := 0; s < 4; s++ {
 			demo.buffer.FillRect(
@@ -317,14 +321,17 @@ func (demo *demoCPU) Update(elapsedTime int64) bool {
 		}
 	}
 
+	// Draw CPU & ASM
 	demo.drawCPU(416, 2)
 	demo.drawASM(416, 72, 25)
 
+	// Draw key hints.
 	demo.drawString(0, 362, "SPACE - Run/stop", &sdl.Color{R: 0, G: 255, B: 0, A: 0})
 	demo.drawString(0, 372, "R - Reset", &sdl.Color{R: 0, G: 255, B: 0, A: 0})
 	demo.drawString(0, 382, "F - Step one frame", &sdl.Color{R: 0, G: 255, B: 0, A: 0})
 	demo.drawString(0, 392, "C - Step one instruction", &sdl.Color{R: 0, G: 255, B: 0, A: 0})
 	demo.drawString(0, 402, "D - Dump screen", &sdl.Color{R: 0, G: 255, B: 0, A: 0})
+	demo.drawString(0, 412, "P - Change palette", &sdl.Color{R: 0, G: 255, B: 0, A: 0})
 
 	// Swap buffer and present our rendered content.
 	demo.window.UpdateSurface()

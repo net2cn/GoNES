@@ -7,6 +7,7 @@ import (
 	"os"
 )
 
+// Cartridge NES game cartridge.
 type Cartridge struct {
 	prgMemory []uint8
 	chrMemory []uint8
@@ -32,6 +33,7 @@ type cartridgeHeader struct {
 	Unused    [5]byte
 }
 
+// NewCartridge Load a .nes file and return a Cartridge struct.
 func NewCartridge(filePath string) (*Cartridge, error) {
 	cart := Cartridge{}
 	file, err := os.Open(filePath)
@@ -47,9 +49,9 @@ func NewCartridge(filePath string) (*Cartridge, error) {
 		return nil, err
 	}
 
-	if header.Name != [4]byte{0x4E, 0x45, 0x53,0x1A}{
+	if header.Name != [4]byte{0x4E, 0x45, 0x53, 0x1A} {
 		fmt.Printf("Failed to load cartridge: This is not a valid file.")
-		return nil,err
+		return nil, err
 	}
 
 	// Unused.
@@ -96,6 +98,7 @@ func NewCartridge(filePath string) (*Cartridge, error) {
 
 // CPU IO
 
+// CPURead Check if cartridge handles CPU read.
 func (cart *Cartridge) CPURead(addr uint16, data *uint8) bool {
 	var mappedAddr uint32 = 0
 	if cart.mapper.CPUMapRead(addr, &mappedAddr) {
@@ -106,6 +109,7 @@ func (cart *Cartridge) CPURead(addr uint16, data *uint8) bool {
 	return false
 }
 
+// CPUWrite Check if cartridge handles CPU write.
 func (cart *Cartridge) CPUWrite(addr uint16, data uint8) bool {
 	var mappedAddr uint32 = 0
 	if cart.mapper.CPUMapWrite(addr, &mappedAddr) {
@@ -118,6 +122,7 @@ func (cart *Cartridge) CPUWrite(addr uint16, data uint8) bool {
 
 // PPU IO
 
+// PPURead Check if cartridge handles PPU read.
 func (cart *Cartridge) PPURead(addr uint16, data *uint8) bool {
 	var mappedAddr uint32 = 0
 	if cart.mapper.PPUMapRead(addr, &mappedAddr) {
@@ -128,6 +133,7 @@ func (cart *Cartridge) PPURead(addr uint16, data *uint8) bool {
 	return false
 }
 
+// PPUWrite Check if cartridge handles PPU write.
 func (cart *Cartridge) PPUWrite(addr uint16, data uint8) bool {
 	var mappedAddr uint32 = 0
 	if cart.mapper.PPUMapWrite(addr, &mappedAddr) {

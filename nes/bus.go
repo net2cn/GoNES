@@ -24,6 +24,7 @@ func NewBus() *Bus {
 
 // CPU IO
 
+// CPURead Allow CPU read from bus.
 func (bus *Bus) CPURead(addr uint16, readOnly ...bool) uint8 {
 	var data uint8 = 0x00
 	bReadOnly := false
@@ -42,6 +43,7 @@ func (bus *Bus) CPURead(addr uint16, readOnly ...bool) uint8 {
 	return data
 }
 
+// CPUWrite Allow CPU write to bus.
 func (bus *Bus) CPUWrite(addr uint16, data uint8) {
 	if bus.cartridge.CPUWrite(addr, data) {
 
@@ -54,16 +56,19 @@ func (bus *Bus) CPUWrite(addr uint16, data uint8) {
 
 // NES interface
 
+// InsertCartridge Connects game cartridge to bus.
 func (bus *Bus) InsertCartridge(cart *Cartridge) {
 	bus.cartridge = cart
 	bus.PPU.ConnectCartridge(cart)
 }
 
+// Reset Reset whole bus and the devices attached to it.
 func (bus *Bus) Reset() {
 	bus.CPU.Reset()
 	bus.systemClockCounter = 0
 }
 
+// Clock Clock bus once.
 func (bus *Bus) Clock() {
 	bus.PPU.Clock()
 	if bus.systemClockCounter%3 == 0 {

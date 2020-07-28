@@ -92,7 +92,7 @@ var instructionNames = [256]string{
 // 	cycles  uint8
 // }
 
-// CPU MOS 6502 CPU
+// CPU MOS 6502 CPU struct
 type CPU struct {
 	// Public
 	Bus *Bus
@@ -157,7 +157,7 @@ func (cpu *CPU) createTable() {
 	}
 }
 
-// ConnectCPU Initialize a CPU and connect it to the bus
+// ConnectCPU Initialize a CPU and connect it to the bus.
 func ConnectCPU(bus *Bus) *CPU {
 	cpu := CPU{}
 	cpu.Bus = bus
@@ -165,7 +165,7 @@ func ConnectCPU(bus *Bus) *CPU {
 	return &cpu
 }
 
-// Reset Reset CPU
+// Reset Reset CPU.
 func (cpu *CPU) Reset() {
 	cpu.addrAbs = 0xFFFC
 	var lo uint16 = uint16(cpu.read(cpu.addrAbs + 0))

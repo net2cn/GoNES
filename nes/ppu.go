@@ -40,6 +40,7 @@ const (
 	controlEnableNMI         = (1 << 7)
 )
 
+// PPU Nintendo 2C02 PPU struct
 type PPU struct {
 	cartridge *Cartridge
 
@@ -67,6 +68,7 @@ type PPU struct {
 	ppuAddress    uint16
 }
 
+// ConnectPPU Initialize a PPU and connect it to the bus.
 func ConnectPPU(bus *Bus) *PPU {
 	var err error
 	ppu := PPU{}
@@ -198,6 +200,7 @@ func (ppu *PPU) setFlag(reg *uint8, f uint8, v bool) {
 
 // CPU IO
 
+// CPURead CPU read from PPU.
 func (ppu *PPU) CPURead(addr uint16, readOnly ...bool) uint8 {
 	bReadOnly := false
 	if len(readOnly) > 0 {
@@ -240,6 +243,7 @@ func (ppu *PPU) CPURead(addr uint16, readOnly ...bool) uint8 {
 	return data
 }
 
+// CPUWrite CPU write to PPU.
 func (ppu *PPU) CPUWrite(addr uint16, data uint8) {
 	switch addr {
 	case 0x0000: // Control
@@ -271,6 +275,7 @@ func (ppu *PPU) CPUWrite(addr uint16, data uint8) {
 
 // PPU IO
 
+// PPURead PPU read from PPU.
 func (ppu *PPU) PPURead(addr uint16, readOnly ...bool) uint8 {
 	bReadOnly := false
 	if len(readOnly) > 0 {
@@ -309,6 +314,7 @@ func (ppu *PPU) PPURead(addr uint16, readOnly ...bool) uint8 {
 	return data
 }
 
+// PPUWrite PPU write to PPU.
 func (ppu *PPU) PPUWrite(addr uint16, data uint8) {
 	addr &= 0x3FFF
 
@@ -336,10 +342,12 @@ func (ppu *PPU) PPUWrite(addr uint16, data uint8) {
 	}
 }
 
+// ConnectCartridge Connect cartridge to PPU.
 func (ppu *PPU) ConnectCartridge(cart *Cartridge) {
 	ppu.cartridge = cart
 }
 
+// Clock Clock PPU once.
 func (ppu *PPU) Clock() {
 	var pixelColor []uint8
 	// Draw old-fashioned static noise.
@@ -369,19 +377,23 @@ func (ppu *PPU) Clock() {
 
 // Debug utilities
 
+// GetScreen Return PPU rendered screen.
 func (ppu *PPU) GetScreen() *sdl.Surface {
 	return ppu.screen
 }
 
+// GetNameTable Return PPU internal name table.
 func (ppu *PPU) GetNameTable(i uint8) *sdl.Surface {
 	return ppu.spriteNameTable[i]
 }
 
+// GetColorFromPaletteRAM Get a color from PPU internal palette RAM.
 func (ppu *PPU) GetColorFromPaletteRAM(palette uint8, pixel uint8) color.RGBA {
 	data := ppu.palette[ppu.PPURead(0x3F00+(uint16(palette)<<2)+uint16(pixel))&0x3F]
 	return color.RGBA{data[0], data[1], data[2], data[3]}
 }
 
+// GetPatternTable Get PPU internal pattern table.
 func (ppu *PPU) GetPatternTable(i uint8, palette uint8) *sdl.Surface {
 	// Bugged, need fixes.
 	for tileY := 0; tileY < 16; tileY++ {
