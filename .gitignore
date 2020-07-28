@@ -1,3 +1,5 @@
+/.vscode
+/.VSCodeCounter
 /roms
 /debug
 go.sum
