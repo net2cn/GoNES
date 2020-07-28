@@ -7,8 +7,17 @@ import (
 	"os"
 )
 
+const (
+	mirrorHorizontal = iota
+	mirrorVertical
+	oneScreenLo
+	oneScrennHi
+)
+
 // Cartridge NES game cartridge.
 type Cartridge struct {
+	mirror int
+
 	prgMemory []uint8
 	chrMemory []uint8
 
@@ -65,6 +74,11 @@ func NewCartridge(filePath string) (*Cartridge, error) {
 
 	// Determine mapper ID
 	cart.mapperID = ((header.Mapper2 >> 4) << 4) | (header.Mapper1 >> 4)
+	if (header.Mapper1 & 0x01) != 0 {
+		cart.mirror = mirrorVertical
+	} else {
+		cart.mirror = mirrorHorizontal
+	}
 
 	var fileType uint8 = 1
 	switch fileType {

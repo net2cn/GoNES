@@ -71,8 +71,14 @@ func (bus *Bus) Reset() {
 // Clock Clock bus once.
 func (bus *Bus) Clock() {
 	bus.PPU.Clock()
+
 	if bus.systemClockCounter%3 == 0 {
 		bus.CPU.Clock()
+	}
+
+	if bus.PPU.NMI {
+		bus.PPU.NMI = false
+		bus.CPU.NMI()
 	}
 	bus.systemClockCounter++
 }

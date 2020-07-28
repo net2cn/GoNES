@@ -45,9 +45,11 @@ type PPU struct {
 	cartridge *Cartridge
 
 	// PPU RAM
-	tableName    [2][1024]uint8
+	TableName    [2][1024]uint8
 	tablePattern [2][4096]uint8
 	tablePalette [32]uint8
+
+	NMI bool
 
 	palette            [][]uint8
 	screen             *sdl.Surface
@@ -106,6 +108,8 @@ func ConnectPPU(bus *Bus) *PPU {
 			panic(err)
 		}
 	}
+
+	ppu.NMI = false
 
 	return &ppu
 }
@@ -218,7 +222,6 @@ func (ppu *PPU) CPURead(addr uint16, readOnly ...bool) uint8 {
 	case 0x0001: // Mask
 
 	case 0x0002: // Status
-		ppu.setFlag(&ppu.status, statusVerticalBlank, true) // quick hack, removes afterwards.
 		data = (ppu.status & 0xE0) | (ppu.ppuDataBuffer & 0x1F)
 		ppu.setFlag(&ppu.status, statusVerticalBlank, false)
 		ppu.addressLatch = 0
@@ -269,7 +272,11 @@ func (ppu *PPU) CPUWrite(addr uint16, data uint8) {
 		}
 	case 0x0007: // PPU data
 		ppu.PPUWrite(ppu.ppuAddress, data)
-		ppu.ppuAddress++
+		if ppu.getFlag(&ppu.control, controlIncrementMode) != 0 {
+			ppu.ppuAddress += 32
+		} else {
+			ppu.ppuAddress++
+		}
 	}
 }
 
@@ -293,7 +300,29 @@ func (ppu *PPU) PPURead(addr uint16, readOnly ...bool) uint8 {
 	} else if addr >= 0x0000 && addr <= 0x1FFF { // Pattern memory
 		data = ppu.tablePattern[(addr&0x1000)>>12][addr&0x0FFF]
 	} else if addr >= 0x2000 && addr <= 0x3EFF { // Name Table memory
+		addr &= 0x0FFF
 
+		if ppu.cartridge.mirror == mirrorVertical {
+			if addr >= 0x0000 && addr <= 0x03FF {
+				data = ppu.TableName[0][addr&0x03FF]
+			} else if addr >= 0x0400 && addr <= 0x07FF {
+				data = ppu.TableName[1][addr&0x03FF]
+			} else if addr >= 0x0800 && addr <= 0x03FF {
+				data = ppu.TableName[0][addr&0x03FF]
+			} else if addr >= 0x0C00 && addr <= 0x0FFF {
+				data = ppu.TableName[1][addr&0x03FF]
+			}
+		} else if ppu.cartridge.mirror == mirrorHorizontal {
+			if addr >= 0x0000 && addr <= 0x03FF {
+				data = ppu.TableName[0][addr&0x03FF]
+			} else if addr >= 0x0400 && addr <= 0x07FF {
+				data = ppu.TableName[0][addr&0x03FF]
+			} else if addr >= 0x0800 && addr <= 0x03FF {
+				data = ppu.TableName[1][addr&0x03FF]
+			} else if addr >= 0x0C00 && addr <= 0x0FFF {
+				data = ppu.TableName[1][addr&0x03FF]
+			}
+		}
 	} else if addr >= 0x3F00 && addr <= 0x3FFF { // Palette Memory
 		addr &= 0x001F
 		if addr == 0x0010 {
@@ -323,7 +352,29 @@ func (ppu *PPU) PPUWrite(addr uint16, data uint8) {
 	} else if addr >= 0x0000 && addr <= 0x1FFF { // Pattern memory
 		ppu.tablePattern[(addr&0x1000)>>12][addr&0x0FFF] = data
 	} else if addr >= 0x2000 && addr <= 0x3EFF { // Name Table memory
+		addr &= 0x0FFF
 
+		if ppu.cartridge.mirror == mirrorVertical {
+			if addr >= 0x0000 && addr <= 0x03FF {
+				ppu.TableName[0][addr&0x03FF] = data
+			} else if addr >= 0x0400 && addr <= 0x07FF {
+				ppu.TableName[1][addr&0x03FF] = data
+			} else if addr >= 0x0800 && addr <= 0x03FF {
+				ppu.TableName[0][addr&0x03FF] = data
+			} else if addr >= 0x0C00 && addr <= 0x0FFF {
+				ppu.TableName[1][addr&0x03FF] = data
+			}
+		} else if ppu.cartridge.mirror == mirrorHorizontal {
+			if addr >= 0x0000 && addr <= 0x03FF {
+				ppu.TableName[0][addr&0x03FF] = data
+			} else if addr >= 0x0400 && addr <= 0x07FF {
+				ppu.TableName[0][addr&0x03FF] = data
+			} else if addr >= 0x0800 && addr <= 0x03FF {
+				ppu.TableName[1][addr&0x03FF] = data
+			} else if addr >= 0x0C00 && addr <= 0x0FFF {
+				ppu.TableName[1][addr&0x03FF] = data
+			}
+		}
 	} else if addr >= 0x3F00 && addr <= 0x3FFF { // Palette Memory
 		addr &= 0x001F
 		if addr == 0x0010 {
@@ -349,6 +400,17 @@ func (ppu *PPU) ConnectCartridge(cart *Cartridge) {
 
 // Clock Clock PPU once.
 func (ppu *PPU) Clock() {
+	if ppu.scanline == -1 && ppu.cycle == 1 {
+		ppu.setFlag(&ppu.status, statusVerticalBlank, false)
+	}
+
+	if ppu.scanline == 241 && ppu.cycle == 1 {
+		ppu.setFlag(&ppu.status, statusVerticalBlank, true)
+		if ppu.getFlag(&ppu.control, controlEnableNMI) != 0 {
+			ppu.NMI = true
+		}
+	}
+
 	var pixelColor []uint8
 	// Draw old-fashioned static noise.
 	if rand.Int()%2 != 0 {
@@ -395,7 +457,6 @@ func (ppu *PPU) GetColorFromPaletteRAM(palette uint8, pixel uint8) color.RGBA {
 
 // GetPatternTable Get PPU internal pattern table.
 func (ppu *PPU) GetPatternTable(i uint8, palette uint8) *sdl.Surface {
-	// Bugged, need fixes.
 	for tileY := 0; tileY < 16; tileY++ {
 		for tileX := 0; tileX < 16; tileX++ {
 			var offset uint16 = uint16(tileY*256 + tileX*16) // Byte offset

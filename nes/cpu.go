@@ -237,8 +237,8 @@ func (cpu *CPU) Clock() {
 
 // Interrupts
 
-// Irq Interrupt request
-func (cpu *CPU) Irq() {
+// IRQ Interrupt request
+func (cpu *CPU) IRQ() {
 	if cpu.getFlag(flagDisableInterrupts) == 0 {
 		cpu.write(0x0100+uint16(cpu.SP), uint8((cpu.PC>>8)&0x00FF))
 		cpu.SP--
@@ -260,8 +260,8 @@ func (cpu *CPU) Irq() {
 	}
 }
 
-// Nmi Non-maskable interrupt
-func (cpu *CPU) Nmi() {
+// NMI Non-maskable interrupt
+func (cpu *CPU) NMI() {
 	cpu.write(0x0100+uint16(cpu.SP), uint8((cpu.PC>>8)&0x00FF))
 	cpu.SP--
 	cpu.write(0x0100+uint16(cpu.SP), uint8(cpu.PC&0x00FF))
