@@ -231,9 +231,10 @@ func (ppu *PPU) CPURead(addr uint16, readOnly ...bool) uint8 {
 		data = ppu.ppuDataBuffer
 		ppu.ppuDataBuffer = ppu.PPURead(ppu.ppuAddress)
 
-		if ppu.ppuAddress > 0x3F00 {
+		if ppu.ppuAddress >= 0x3F00 {
 			data = ppu.ppuDataBuffer
 		}
+		ppu.ppuAddress++
 	}
 
 	return data
@@ -263,7 +264,8 @@ func (ppu *PPU) CPUWrite(addr uint16, data uint8) {
 			ppu.addressLatch = 0
 		}
 	case 0x0007: // PPU data
-		ppu.PPUWrite(addr, data)
+		ppu.PPUWrite(ppu.ppuAddress, data)
+		ppu.ppuAddress++
 	}
 }
 
@@ -278,7 +280,6 @@ func (ppu *PPU) PPURead(addr uint16, readOnly ...bool) uint8 {
 	// Placeholder
 	_ = bReadOnly
 
-	// Placeholder.
 	var data uint8 = 0x00
 	addr &= 0x3FFF
 
@@ -376,8 +377,8 @@ func (ppu *PPU) GetNameTable(i uint8) *sdl.Surface {
 	return ppu.spriteNameTable[i]
 }
 
-func (ppu *PPU) GetColorFromPaletteRAM(palette uint8, pixel uint8) color.Color {
-	data := ppu.palette[ppu.PPURead(0x3F00+uint16((palette<<2))+uint16(pixel))]
+func (ppu *PPU) GetColorFromPaletteRAM(palette uint8, pixel uint8) color.RGBA {
+	data := ppu.palette[ppu.PPURead(0x3F00+(uint16(palette)<<2)+uint16(pixel))&0x3F]
 	return color.RGBA{data[0], data[1], data[2], data[3]}
 }
 
@@ -388,8 +389,8 @@ func (ppu *PPU) GetPatternTable(i uint8, palette uint8) *sdl.Surface {
 			var offset uint16 = uint16(tileY*256 + tileX*16) // Byte offset
 
 			for row := 0; row < 8; row++ {
-				var tileLSB uint8 = ppu.PPURead(uint16(uint16(i)*0x1000 + offset + uint16(row) + 0))
-				var tileMSB uint8 = ppu.PPURead(uint16(uint16(i)*0x1000 + offset + uint16(row) + 8))
+				var tileLSB uint8 = ppu.PPURead(uint16(uint16(i)*0x1000 + offset + uint16(row) + 0x0000))
+				var tileMSB uint8 = ppu.PPURead(uint16(uint16(i)*0x1000 + offset + uint16(row) + 0x0008))
 
 				for col := 0; col < 8; col++ {
 					var pixel uint8 = (tileLSB & 0x01) + (tileMSB & 0x01)

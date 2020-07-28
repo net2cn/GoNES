@@ -47,6 +47,11 @@ func NewCartridge(filePath string) (*Cartridge, error) {
 		return nil, err
 	}
 
+	if header.Name != [4]byte{0x4E, 0x45, 0x53,0x1A}{
+		fmt.Printf("Failed to load cartridge: This is not a valid file.")
+		return nil,err
+	}
+
 	// Unused.
 	if header.Mapper1&0x04 != 0 {
 		trainer := make([]byte, 512)

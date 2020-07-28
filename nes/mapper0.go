@@ -13,14 +13,11 @@ func NewMapper0(prgBanks uint8, chrBanks uint8) Mapper {
 }
 
 func (mapper *Mapper0) CPUMapRead(addr uint16, mappedAddr *uint32) bool {
-	var tmp uint32
 	if addr >= 0x8000 && addr <= 0xFFFF {
 		if mapper.prgBanks > 1 {
-			tmp = uint32(addr & 0x7FFF)
-			*mappedAddr = tmp
+			*mappedAddr = uint32(addr & 0x7FFF)
 		} else {
-			tmp = uint32(addr & 0x3FFF)
-			*mappedAddr = tmp
+			*mappedAddr = uint32(addr & 0x3FFF)
 		}
 		return true
 	}
@@ -37,10 +34,8 @@ func (mapper *Mapper0) CPUMapWrite(addr uint16, mappedAddr *uint32) bool {
 }
 
 func (mapper *Mapper0) PPUMapRead(addr uint16, mappedAddr *uint32) bool {
-	var tmp uint32
 	if addr >= 0x0000 && addr <= 0x1FFF {
-		tmp = uint32(addr)
-		mappedAddr = &tmp
+		*mappedAddr = uint32(addr)
 		return true
 	}
 
