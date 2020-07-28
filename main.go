@@ -69,7 +69,7 @@ func (debug *debugger) drawSprite(x int, y int, sprite *sdl.Surface) {
 
 func (debug *debugger) drawPartialSprite(dstX int, dstY int, sprite *sdl.Surface, srcX int, srcY int, w int, h int) {
 	dstRect := sdl.Rect{X: int32(dstX), Y: int32(dstY), W: int32(w), H: int32(h)}
-	srcRect := sdl.Rect{X: int32(srcX), Y: int32(srcY), W: sprite.W, H: sprite.H}
+	srcRect := sdl.Rect{X: int32(srcX), Y: int32(srcY), W: int32(w), H: int32(h)}
 	sprite.Blit(&srcRect, debug.buffer, &dstRect)
 }
 
@@ -134,6 +134,18 @@ func (debug *debugger) drawASM(x int, y int, nLines int) {
 			if idx != len(debug.mapKeys)-1 && idx > 0 {
 				debug.drawString(x, nLineY, debug.mapASM[uint16(debug.mapKeys[idx])], &sdl.Color{R: 0, G: 255, B: 0, A: 0})
 			}
+		}
+	}
+}
+
+func (debug *debugger) drawNameTable(x int, y int, nameTable *sdl.Surface) {
+	for v := 0; v < 30; v++ {
+		for h := 0; h < 32; h++ {
+			var id uint8 = uint8(uint32(debug.bus.PPU.TableName[0][v*32+h]))
+
+			debug.drawPartialSprite(x+h*8, y+v*8, nameTable,
+				int(id&0x0F<<3), int((id>>4)&0x0F<<3),
+				8, 8)
 		}
 	}
 }
@@ -302,16 +314,10 @@ func (debug *debugger) Update(elapsedTime int64) bool {
 
 	// Draw screen, sprites.
 	// debug.drawSprite(0, 0, debug.bus.PPU.GetScreen())
-	tbl := debug.bus.PPU.GetPatternTable(1, debug.selectedPalette)
-	for y := 0; y < 30; y++ {
-		for x := 0; x < 32; x++ {
-			var id uint8 = uint8(uint32(debug.bus.PPU.TableName[0][y*32+x]))
+	// Quick hack to render background tiles
+	nameTable := debug.bus.PPU.GetPatternTable(1, debug.selectedPalette)
+	debug.drawNameTable(0, 0, nameTable)
 
-			debug.drawPartialSprite(x*8, y*8, tbl,
-				int(id&0x0F<<3), int((id>>4)&0x0F<<3),
-				8, 8)
-		}
-	}
 	debug.drawSprite(416, 349, debug.bus.PPU.GetPatternTable(0, debug.selectedPalette))
 	debug.drawSprite(416+132, 349, debug.bus.PPU.GetPatternTable(1, debug.selectedPalette))
 
@@ -324,6 +330,7 @@ func (debug *debugger) Update(elapsedTime int64) bool {
 			H: int32(switchSize * 2)},
 		0x00FFFF00,
 	)
+
 	// Draw palettes.
 	for p := 0; p < 8; p++ {
 		for s := 0; s < 4; s++ {
