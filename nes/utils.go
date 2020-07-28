@@ -1,8 +1,10 @@
 package nes
 
 import (
+	"encoding/binary"
 	"fmt"
 	_ "fmt" // Remember to remove the blank identifier here.
+	"image/color"
 	"os"
 	"strconv"
 	"strings"
@@ -36,4 +38,9 @@ func IsPathExists(path string) bool {
 	}
 	fmt.Printf("Exception has occurred in IsPahtExists(): %s", err)
 	return false
+}
+
+func ConvertColorToUint32(c color.RGBA) uint32 {
+	bytes := []byte{c.R, c.G, c.B, c.A}
+	return binary.LittleEndian.Uint32(bytes)
 }

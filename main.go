@@ -29,6 +29,8 @@ type demoCPU struct {
 	emulationRun bool
 	residualTime int64
 
+	selectedPalette uint8
+
 	mapASM    map[uint16]string
 	mapKeys   []int
 	inputLock bool
@@ -219,9 +221,9 @@ func (demo *demoCPU) Construct(width int32, height int32) error {
 }
 
 func (demo *demoCPU) Update(elapsedTime int64) bool {
-	// Using double buffering technique to prevent flickering.
+	// Use double buffering technique to prevent flickering.
 
-	//Get user inputs.
+	// Check if we have reach the end of a frame
 	if demo.emulationRun {
 		if demo.residualTime > 0 {
 			demo.residualTime -= elapsedTime
@@ -235,6 +237,7 @@ func (demo *demoCPU) Update(elapsedTime int64) bool {
 		}
 	}
 
+	//Get user inputs.
 	for event := sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
 		switch t := event.(type) {
 		case *sdl.QuitEvent:
@@ -262,11 +265,14 @@ func (demo *demoCPU) Update(elapsedTime int64) bool {
 					demo.emulationRun = !demo.emulationRun
 				case sdl.K_r:
 					demo.bus.CPU.Reset()
+				case sdl.K_p:
+					demo.selectedPalette++
+					demo.selectedPalette &= 0x07
 				case sdl.K_d:
 					if !nes.IsPathExists("./debug") {
 						os.Mkdir("debug", os.ModePerm)
 					}
-					img.SavePNG(demo.bus.PPU.GetSprite(), "./debug/sprite.png")
+					img.SavePNG(demo.bus.PPU.GetPatternTable(0, demo.selectedPalette), "./debug/sprite.png")
 				}
 			}
 
@@ -286,14 +292,39 @@ func (demo *demoCPU) Update(elapsedTime int64) bool {
 	}
 
 	// Render stuffs.
-	demo.drawSprite(0, 0, demo.bus.PPU.GetSprite())
-	demo.drawCPU(464, 2)
-	demo.drawASM(464, 72, 26)
-	demo.drawString(464, 362, "SPACE - Run/stop", &sdl.Color{R: 0, G: 255, B: 0, A: 0})
-	demo.drawString(464, 372, "R - Reset", &sdl.Color{R: 0, G: 255, B: 0, A: 0})
-	demo.drawString(464, 382, "F - Step one frame", &sdl.Color{R: 0, G: 255, B: 0, A: 0})
-	demo.drawString(464, 392, "C - Step one instruction", &sdl.Color{R: 0, G: 255, B: 0, A: 0})
-	demo.drawString(464, 402, "D - Dump sprite", &sdl.Color{R: 0, G: 255, B: 0, A: 0})
+	// Always remember to draw on buffer.
+	demo.drawSprite(0, 0, demo.bus.PPU.GetScreen())
+	demo.drawSprite(416, 348, demo.bus.PPU.GetPatternTable(0, demo.selectedPalette))
+	demo.drawSprite(416+132, 348, demo.bus.PPU.GetPatternTable(1, demo.selectedPalette))
+
+	switchSize := 6
+	demo.buffer.FillRect(
+		&sdl.Rect{X: int32(419 + int(demo.selectedPalette)*(switchSize*5) - 3),
+			Y: 337,
+			W: int32((switchSize * 5)),
+			H: int32(switchSize * 2)},
+		0x00FFFF00,
+	)
+	for p := 0; p < 8; p++ {
+		for s := 0; s < 4; s++ {
+			demo.buffer.FillRect(
+				&sdl.Rect{X: int32(419 + p*(switchSize*5) + s*switchSize),
+					Y: 340,
+					W: int32(switchSize),
+					H: int32(switchSize)},
+				nes.ConvertColorToUint32(
+					demo.bus.PPU.GetColorFromPaletteRAM(uint8(p), uint8(s))))
+		}
+	}
+
+	demo.drawCPU(416, 2)
+	demo.drawASM(416, 72, 25)
+
+	demo.drawString(0, 362, "SPACE - Run/stop", &sdl.Color{R: 0, G: 255, B: 0, A: 0})
+	demo.drawString(0, 372, "R - Reset", &sdl.Color{R: 0, G: 255, B: 0, A: 0})
+	demo.drawString(0, 382, "F - Step one frame", &sdl.Color{R: 0, G: 255, B: 0, A: 0})
+	demo.drawString(0, 392, "C - Step one instruction", &sdl.Color{R: 0, G: 255, B: 0, A: 0})
+	demo.drawString(0, 402, "D - Dump screen", &sdl.Color{R: 0, G: 255, B: 0, A: 0})
 
 	// Swap buffer and present our rendered content.
 	demo.window.UpdateSurface()
