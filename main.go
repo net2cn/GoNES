@@ -313,10 +313,10 @@ func (debug *debugger) Update(elapsedTime int64) bool {
 	// Always remember to draw on buffer.
 
 	// Draw screen, sprites.
-	// debug.drawSprite(0, 0, debug.bus.PPU.GetScreen())
+	debug.drawSprite(0, 0, debug.bus.PPU.GetScreen())
 	// Quick hack to render background tiles
-	nameTable := debug.bus.PPU.GetPatternTable(1, debug.selectedPalette)
-	debug.drawNameTable(0, 0, nameTable)
+	// nameTable := debug.bus.PPU.GetPatternTable(1, debug.selectedPalette)
+	// debug.drawNameTable(0, 0, nameTable)
 
 	debug.drawSprite(416, 349, debug.bus.PPU.GetPatternTable(0, debug.selectedPalette))
 	debug.drawSprite(416+132, 349, debug.bus.PPU.GetPatternTable(1, debug.selectedPalette))
@@ -387,7 +387,7 @@ func main() {
 	fmt.Println("HELLO WORLD -ALLTALE-")
 	fmt.Println("With programming we have god's hand.")
 	debug := debugger{}
-	err := debug.Construct("./roms/dk.nes", windowWidth, windowHeight)
+	err := debug.Construct("./roms/smb.nes", windowWidth, windowHeight)
 	if err != nil {
 		return
 	}

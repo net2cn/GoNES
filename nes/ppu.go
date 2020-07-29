@@ -3,7 +3,6 @@ package nes
 import (
 	"fmt"
 	"image/color"
-	"math/rand"
 
 	"github.com/veandco/go-sdl2/sdl"
 )
@@ -40,6 +39,16 @@ const (
 	controlEnableNMI         = (1 << 7)
 )
 
+// Bitmask for PPU loppy register.
+const (
+	loppyCoarseX    = 0x001F
+	loppyCoarseY    = 0x03E0
+	loppyNameTableX = (1 << 10)
+	loppyNameTableY = (1 << 11)
+	loppyFineY      = 0x7000
+	loppyUnused     = (1 << 15)
+)
+
 // PPU Nintendo 2C02 PPU struct
 type PPU struct {
 	cartridge *Cartridge
@@ -67,7 +76,21 @@ type PPU struct {
 
 	addressLatch  uint8
 	ppuDataBuffer uint8 // Data would delayed by 1 cycle when read.
-	ppuAddress    uint16
+
+	vramAddr uint16
+	tramAddr uint16
+
+	fineX uint8
+
+	nextTileID   uint8
+	nextTileAttr uint8
+	nextTileLSB  uint8
+	nextTileMSB  uint8
+
+	shifterPatternLo uint16
+	shifterPatternHi uint16
+	shifterAttribLo  uint16
+	shifterAttribHi  uint16
 }
 
 // ConnectPPU Initialize a PPU and connect it to the bus.
@@ -202,6 +225,15 @@ func (ppu *PPU) setFlag(reg *uint8, f uint8, v bool) {
 	}
 }
 
+// Addr IO
+func (ppu *PPU) getLoppyRegister(addr *uint16, m int) uint16 {
+	return (*addr & uint16(m)) / uint16(m&-m)
+}
+
+func (ppu *PPU) setLoppyRegister(addr *uint16, m int, val uint8) {
+	*addr |= uint16(val) * uint16(m&-m)
+}
+
 // CPU IO
 
 // CPURead CPU read from PPU.
@@ -220,7 +252,7 @@ func (ppu *PPU) CPURead(addr uint16, readOnly ...bool) uint8 {
 	case 0x0000: // Control
 
 	case 0x0001: // Mask
-
+		
 	case 0x0002: // Status
 		data = (ppu.status & 0xE0) | (ppu.ppuDataBuffer & 0x1F)
 		ppu.setFlag(&ppu.status, statusVerticalBlank, false)
@@ -235,12 +267,19 @@ func (ppu *PPU) CPURead(addr uint16, readOnly ...bool) uint8 {
 
 	case 0x0007: // PPU data:
 		data = ppu.ppuDataBuffer
-		ppu.ppuDataBuffer = ppu.PPURead(ppu.ppuAddress)
+		ppu.ppuDataBuffer = ppu.PPURead(ppu.vramAddr)
 
-		if ppu.ppuAddress >= 0x3F00 {
+		// If CPU is reading address above 0x3F00, we need to instantly return its value
+		// instead of delay 1 cylce.
+		if ppu.vramAddr >= 0x3F00 {
 			data = ppu.ppuDataBuffer
 		}
-		ppu.ppuAddress++
+
+		if ppu.getFlag(&ppu.control, controlIncrementMode) != 0 {
+			ppu.vramAddr += 32
+		} else {
+			ppu.vramAddr++
+		}
 	}
 
 	return data
@@ -251,6 +290,10 @@ func (ppu *PPU) CPUWrite(addr uint16, data uint8) {
 	switch addr {
 	case 0x0000: // Control
 		ppu.control = data
+		ppu.setLoppyRegister(&ppu.tramAddr, loppyNameTableX,
+			ppu.getFlag(&ppu.control, controlNameTableX))
+		ppu.setLoppyRegister(&ppu.tramAddr, loppyNameTableY,
+			ppu.getFlag(&ppu.control, controlNameTableY))
 	case 0x0001: // Mask
 		ppu.mask = data
 	case 0x0002: // Status
@@ -260,22 +303,31 @@ func (ppu *PPU) CPUWrite(addr uint16, data uint8) {
 	case 0x0004: // OAM data
 
 	case 0x0005: // Scroll
-
+		if ppu.addressLatch == 0 {
+			ppu.fineX = data & 0x07
+			ppu.setLoppyRegister(&ppu.tramAddr, loppyCoarseX, data>>3)
+			ppu.addressLatch = 1
+		} else {
+			ppu.setLoppyRegister(&ppu.tramAddr, loppyFineY, data&0x07)
+			ppu.setLoppyRegister(&ppu.tramAddr, loppyCoarseY, data>>3)
+			ppu.addressLatch = 0
+		}
 	case 0x0006: // PPU address
 		if ppu.addressLatch == 0 {
-			ppu.ppuAddress = (ppu.ppuAddress & 0x00FF) | (uint16(data) << 8)
+			ppu.tramAddr = (uint16(data&0x3F) << 8) | (ppu.tramAddr & 0x00FF)
 			ppu.addressLatch = 1
 
 		} else {
-			ppu.ppuAddress = (ppu.ppuAddress & 0xFF00) | uint16(data)
+			ppu.tramAddr = (ppu.tramAddr & 0xFF00) | uint16(data)
+			ppu.vramAddr = ppu.tramAddr
 			ppu.addressLatch = 0
 		}
 	case 0x0007: // PPU data
-		ppu.PPUWrite(ppu.ppuAddress, data)
+		ppu.PPUWrite(ppu.vramAddr, data)
 		if ppu.getFlag(&ppu.control, controlIncrementMode) != 0 {
-			ppu.ppuAddress += 32
+			ppu.vramAddr += 32
 		} else {
-			ppu.ppuAddress++
+			ppu.vramAddr++
 		}
 	}
 }
@@ -337,7 +389,12 @@ func (ppu *PPU) PPURead(addr uint16, readOnly ...bool) uint8 {
 		if addr == 0x001C {
 			addr = 0x000C
 		}
-		data = ppu.tablePalette[addr]
+
+		if ppu.getFlag(&ppu.mask, maskGreyscale) != 0 {
+			data = ppu.tablePalette[addr] & 0x30
+		} else {
+			data = ppu.tablePalette[addr] & 0x3F
+		}
 	}
 
 	return data
@@ -400,30 +457,206 @@ func (ppu *PPU) ConnectCartridge(cart *Cartridge) {
 
 // Clock Clock PPU once.
 func (ppu *PPU) Clock() {
-	if ppu.scanline == -1 && ppu.cycle == 1 {
-		ppu.setFlag(&ppu.status, statusVerticalBlank, false)
-	}
-
-	if ppu.scanline == 241 && ppu.cycle == 1 {
-		ppu.setFlag(&ppu.status, statusVerticalBlank, true)
-		if ppu.getFlag(&ppu.control, controlEnableNMI) != 0 {
-			ppu.NMI = true
+	var incrementScrollX func() = func() {
+		if (ppu.getFlag(&ppu.mask, maskRenderBackground) != 0) ||
+			(ppu.getFlag(&ppu.mask, maskRenderSprites) != 0) {
+			if ppu.getLoppyRegister(&ppu.vramAddr, loppyCoarseX) == 31 {
+				ppu.setLoppyRegister(&ppu.vramAddr, loppyCoarseX, 0)
+				ppu.setLoppyRegister(&ppu.vramAddr, loppyNameTableX,
+					uint8(^ppu.getLoppyRegister(&ppu.vramAddr, loppyNameTableX)))
+			} else {
+				ppu.setLoppyRegister(&ppu.vramAddr, loppyCoarseX,
+					uint8(ppu.getLoppyRegister(&ppu.vramAddr, loppyCoarseX)+1))
+			}
 		}
 	}
 
-	var pixelColor []uint8
-	// Draw old-fashioned static noise.
-	if rand.Int()%2 != 0 {
-		pixelColor = ppu.palette[0x3F]
-	} else {
-		pixelColor = ppu.palette[0x30]
+	var incrementScrollY func() = func() {
+		if (ppu.getFlag(&ppu.mask, maskRenderBackground) != 0) ||
+			(ppu.getFlag(&ppu.mask, maskRenderSprites) != 0) {
+			if ppu.getLoppyRegister(&ppu.vramAddr, loppyFineY) < 7 {
+				ppu.setLoppyRegister(&ppu.vramAddr, loppyFineY,
+					uint8(ppu.getLoppyRegister(&ppu.vramAddr, loppyFineY)+1))
+			} else {
+				ppu.setLoppyRegister(&ppu.vramAddr, loppyFineY, 0)
+
+				if ppu.getLoppyRegister(&ppu.vramAddr, loppyCoarseY) == 29 {
+					ppu.setLoppyRegister(&ppu.vramAddr, loppyCoarseY, 0)
+					ppu.setLoppyRegister(&ppu.vramAddr, loppyNameTableY,
+						uint8(^ppu.getLoppyRegister(&ppu.vramAddr, loppyNameTableY)))
+				} else if ppu.getLoppyRegister(&ppu.vramAddr, loppyCoarseY) == 31 {
+					ppu.setLoppyRegister(&ppu.vramAddr, loppyCoarseY, 0)
+				} else {
+					ppu.setLoppyRegister(&ppu.vramAddr, loppyCoarseY,
+						uint8(ppu.getLoppyRegister(&ppu.vramAddr, loppyCoarseY)+1))
+				}
+			}
+		}
+	}
+
+	var transferAddressX func() = func() {
+		if (ppu.getFlag(&ppu.mask, maskRenderBackground) != 0) ||
+			(ppu.getFlag(&ppu.mask, maskRenderSprites) != 0) {
+			ppu.setLoppyRegister(&ppu.vramAddr, loppyNameTableX,
+				uint8(ppu.getLoppyRegister(&ppu.tramAddr, loppyNameTableX)))
+			ppu.setLoppyRegister(&ppu.vramAddr, loppyCoarseX,
+				uint8(ppu.getLoppyRegister(&ppu.tramAddr, loppyCoarseX)))
+		}
+	}
+
+	var transferAddressY func() = func() {
+		if (ppu.getFlag(&ppu.mask, maskRenderBackground) != 0) ||
+			(ppu.getFlag(&ppu.mask, maskRenderSprites) != 0) {
+			ppu.setLoppyRegister(&ppu.vramAddr, loppyFineY,
+				uint8(ppu.getLoppyRegister(&ppu.tramAddr, loppyFineY)))
+			ppu.setLoppyRegister(&ppu.vramAddr, loppyNameTableY,
+				uint8(ppu.getLoppyRegister(&ppu.tramAddr, loppyNameTableY)))
+			ppu.setLoppyRegister(&ppu.vramAddr, loppyCoarseY,
+				uint8(ppu.getLoppyRegister(&ppu.tramAddr, loppyCoarseY)))
+		}
+	}
+
+	var loadBackgroundShifters func() = func() {
+		ppu.shifterPatternLo = (ppu.shifterPatternLo & 0xFF00) | uint16(ppu.nextTileLSB)
+		ppu.shifterPatternHi = (ppu.shifterPatternHi & 0xFF00) | uint16(ppu.nextTileMSB)
+		if ppu.nextTileAttr&0b01 != 0 {
+			ppu.shifterAttribLo = (ppu.shifterAttribLo & 0xFF00) | 0xFF
+		} else {
+			ppu.shifterAttribLo = (ppu.shifterAttribLo & 0xFF00) | 0x00
+		}
+		if ppu.nextTileAttr&0b10 != 0 {
+			ppu.shifterAttribHi = (ppu.shifterAttribHi & 0xFF00) | 0xFF
+		} else {
+			ppu.shifterAttribHi = (ppu.shifterAttribHi & 0xFF00) | 0x00
+		}
+	}
+
+	var updateShifters func() = func() {
+		if ppu.getFlag(&ppu.mask, maskRenderBackground) != 0 {
+			ppu.shifterPatternLo <<= 1
+			ppu.shifterPatternHi <<= 1
+
+			ppu.shifterAttribLo <<= 1
+			ppu.shifterAttribHi <<= 1
+		}
+	}
+
+	if ppu.scanline >= -1 && ppu.scanline < 240 {
+		if ppu.scanline == 0 && ppu.cycle == 0 {
+			ppu.cycle = 1
+		}
+
+		if ppu.scanline == -1 && ppu.cycle == 1 {
+			ppu.setFlag(&ppu.status, statusVerticalBlank, false)
+		}
+
+		if (ppu.cycle >= 2 && ppu.cycle <= 258) || (ppu.cycle >= 321 && ppu.cycle < 338) {
+			updateShifters()
+
+			switch (ppu.cycle - 1) % 8 {
+			case 0:
+				loadBackgroundShifters()
+				ppu.nextTileID = ppu.PPURead(0x2000 | (ppu.vramAddr & 0x0FFF))
+			case 2:
+				ppu.nextTileAttr = ppu.PPURead(0x23C0 |
+					(ppu.getLoppyRegister(&ppu.vramAddr, loppyNameTableY) << 11) |
+					(ppu.getLoppyRegister(&ppu.vramAddr, loppyNameTableX) << 10) |
+					((ppu.getLoppyRegister(&ppu.vramAddr, loppyCoarseY) >> 2) << 3) |
+					(ppu.getLoppyRegister(&ppu.vramAddr, loppyCoarseX) >> 2))
+				if ppu.getLoppyRegister(&ppu.vramAddr, loppyCoarseY)&0x02 != 0 {
+					ppu.nextTileAttr >>= 4
+				}
+				if ppu.getLoppyRegister(&ppu.vramAddr, loppyCoarseX)&0x02 != 0 {
+					ppu.nextTileAttr >>= 2
+				}
+				ppu.nextTileAttr &= 0x03
+			case 4:
+				ppu.nextTileLSB = ppu.PPURead((uint16(ppu.getFlag(&ppu.control, controlPatternBackground)) << 12) +
+					uint16(ppu.nextTileID)<<4 +
+					ppu.getLoppyRegister(&ppu.vramAddr, loppyFineY) + 0)
+			case 6:
+				ppu.nextTileMSB = ppu.PPURead((uint16(ppu.getFlag(&ppu.control, controlPatternBackground)) << 12) +
+					uint16(ppu.nextTileID)<<4 +
+					ppu.getLoppyRegister(&ppu.vramAddr, loppyFineY) + 8)
+			case 7:
+ 				incrementScrollX()
+			}
+		}
+
+		if ppu.cycle == 256 {
+			incrementScrollY()
+		}
+
+		if ppu.cycle == 257 {
+			loadBackgroundShifters()
+			transferAddressX()
+		}
+
+		if ppu.cycle == 338 || ppu.cycle == 340 {
+			ppu.nextTileID = ppu.PPURead(0x2000 | (ppu.vramAddr & 0x0FFF))
+		}
+
+		if ppu.scanline == -1 && ppu.cycle >= 280 && ppu.cycle < 305 {
+			transferAddressY()
+		}
+	}
+
+	if ppu.scanline == 240 {
+		// Placeholder
+	}
+
+	if ppu.scanline >= 241 && ppu.scanline <= 261 {
+		if ppu.scanline == 241 && ppu.cycle == 1 {
+			ppu.setFlag(&ppu.status, statusVerticalBlank, true)
+			if ppu.getFlag(&ppu.control, controlEnableNMI) != 0 {
+				ppu.NMI = true
+			}
+		}
+	}
+
+	var bgPixel uint8 = 0x00
+	var bgPalette uint8 = 0x00
+
+	if ppu.getFlag(&ppu.mask, maskRenderBackground) != 0 {
+		var bitMux uint16 = 0x8000 >> ppu.fineX
+
+		var p0Pixel uint8 = 0
+		if (ppu.shifterPatternLo & bitMux) > 0 {
+			p0Pixel = 1
+		}
+		var p1Pixel uint8 = 0
+		if (ppu.shifterPatternHi & bitMux) > 0 {
+			p1Pixel = 1
+		}
+		bgPixel = (p1Pixel << 1) | p0Pixel
+
+		var pal0 uint8 = 0
+		if (ppu.shifterAttribLo & bitMux) > 0 {
+			pal0 = 1
+		}
+		var pal1 uint8 = 0
+		if (ppu.shifterAttribHi & bitMux) > 0 {
+			pal1 = 1
+		}
+		bgPalette = (pal1 << 1) | pal0
 	}
 
 	ppu.screen.Set(int(ppu.cycle-1+1), int(ppu.scanline+1),
-		color.RGBA{pixelColor[0],
-			pixelColor[1],
-			pixelColor[2],
-			pixelColor[3]})
+		ppu.GetColorFromPaletteRAM(bgPalette, bgPixel))
+
+	// Draw old-fashioned static noise.
+	// var pixelColor []uint8
+	// if rand.Int()%2 != 0 {
+	// 	pixelColor = ppu.palette[0x3F]
+	// } else {
+	// 	pixelColor = ppu.palette[0x30]
+	// }
+
+	// ppu.screen.Set(int(ppu.cycle-1+1), int(ppu.scanline+1),
+	// color.RGBA{pixelColor[0],
+	// 	pixelColor[1],
+	// 	pixelColor[2],
+	// 	pixelColor[3]})
 
 	// Advance renderer, it's relentless and it never stops.
 	ppu.cycle++
