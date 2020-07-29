@@ -2,10 +2,13 @@ package nes
 
 // Bus The main bus of a NES.
 type Bus struct {
-	CPU       *CPU
-	CPURAM    []uint8
-	PPU       *PPU
-	cartridge *Cartridge
+	CPU        *CPU
+	CPURAM     []uint8
+	PPU        *PPU
+	cartridge  *Cartridge
+	Controller []uint8
+
+	controllerState []uint8
 
 	systemClockCounter uint32
 }
@@ -14,7 +17,12 @@ type Bus struct {
 func NewBus() *Bus {
 	// Init RAM space.
 	ram := make([]uint8, 64*1024)
-	bus := Bus{nil, ram, nil, nil, 0}
+	bus := Bus{CPU: nil,
+		CPURAM:          ram,
+		PPU:             nil,
+		cartridge:       nil,
+		Controller:      make([]uint8, 2),
+		controllerState: make([]uint8, 2)}
 
 	// Connect CPU to bus
 	bus.CPU = ConnectCPU(&bus)
@@ -38,6 +46,12 @@ func (bus *Bus) CPURead(addr uint16, readOnly ...bool) uint8 {
 		data = bus.CPURAM[addr&0x07FF] // addr&0x07FF yields back the geniune value after mirroring
 	} else if addr >= 0x2000 && addr <= 0x3FFF {
 		data = bus.PPU.CPURead(addr&0x0007, bReadOnly)
+	} else if addr >= 0x4016 && addr <= 0x4017 {
+		data = 0
+		if (bus.controllerState[addr&0x0001] & 0x80) > 0 {
+			data = 1
+		}
+		bus.controllerState[addr&0x0001] <<= 1
 	}
 
 	return data
@@ -51,6 +65,8 @@ func (bus *Bus) CPUWrite(addr uint16, data uint8) {
 		bus.CPURAM[addr&0x07FF] = data // addr&0x07FF yields back the geniune value after mirroring
 	} else if addr >= 0x2000 && addr < 0x3FFF {
 		bus.PPU.CPUWrite(addr&0x0007, data)
+	} else if addr >= 0x4016 && addr <= 0x4017 {
+		bus.controllerState[addr&0x0001] = bus.Controller[addr&0x0001]
 	}
 }
 

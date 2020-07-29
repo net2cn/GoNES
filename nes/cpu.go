@@ -1,5 +1,7 @@
 package nes
 
+import "fmt"
+
 const (
 	_ = iota
 	modeImplied
@@ -217,6 +219,9 @@ func (cpu *CPU) setFlag(f uint8, v bool) {
 func (cpu *CPU) Clock() {
 	if cpu.cycles == 0 {
 		cpu.opcode = cpu.read(cpu.PC)
+		if cpu.PC == 0x822A && cpu.A == 248 && cpu.X == 7 && cpu.Y == 160 && cpu.SP == 250 {
+			fmt.Println("hit")
+		}
 
 		cpu.setFlag(flagUnused, true)
 
@@ -231,6 +236,7 @@ func (cpu *CPU) Clock() {
 
 		cpu.setFlag(flagUnused, true)
 	}
+
 	cpu.clockCount++
 	cpu.cycles--
 }

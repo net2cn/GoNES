@@ -263,6 +263,18 @@ func (debug *debugger) Update(elapsedTime int64) bool {
 		case *sdl.KeyboardEvent:
 			if !debug.inputLock {
 				switch t.Keysym.Sym {
+				// NES controller
+				case sdl.K_s:
+					debug.bus.Controller[0] |= 0x10
+				case sdl.K_UP:
+					debug.bus.Controller[0] |= 0x08
+				case sdl.K_DOWN:
+					debug.bus.Controller[0] |= 0x04
+				case sdl.K_LEFT:
+					debug.bus.Controller[0] |= 0x02
+				case sdl.K_RIGHT:
+					debug.bus.Controller[0] |= 0x01
+				// Debug utility.
 				case sdl.K_c:
 					// Golang's do while.
 					for done := true; done; done = debug.bus.CPU.Complete() != true {
@@ -303,10 +315,9 @@ func (debug *debugger) Update(elapsedTime int64) bool {
 				} else if t.State == sdl.PRESSED {
 					debug.inputLock = true
 				}
+				debug.bus.Controller[0] |= 0x00
 			}
-
 		}
-
 	}
 
 	// Render stuffs.
@@ -315,7 +326,7 @@ func (debug *debugger) Update(elapsedTime int64) bool {
 	// Draw screen, sprites.
 	debug.drawSprite(0, 0, debug.bus.PPU.GetScreen())
 	// Quick hack to render background tiles
-	// nameTable := debug.bus.PPU.GetPatternTable(1, debug.selectedPalette)
+	// nameTable := debug.bus.PPU.GetPatternTable(0, debug.selectedPalette)
 	// debug.drawNameTable(0, 0, nameTable)
 
 	debug.drawSprite(416, 349, debug.bus.PPU.GetPatternTable(0, debug.selectedPalette))
@@ -387,7 +398,7 @@ func main() {
 	fmt.Println("HELLO WORLD -ALLTALE-")
 	fmt.Println("With programming we have god's hand.")
 	debug := debugger{}
-	err := debug.Construct("./roms/smb.nes", windowWidth, windowHeight)
+	err := debug.Construct("./test/nestest.nes", windowWidth, windowHeight)
 	if err != nil {
 		return
 	}
