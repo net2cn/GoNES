@@ -392,8 +392,8 @@ func (cpu *CPU) izx() uint8 {
 	var t uint16 = uint16(cpu.read(cpu.PC))
 	cpu.PC++
 
-	var lo uint16 = uint16(cpu.read(uint16(t+uint16(cpu.X)) & 0x00FF))
-	var hi uint16 = uint16(cpu.read(uint16(t+uint16(t+uint16(cpu.X)+1)) & 0x00FF))
+	var lo uint16 = uint16(cpu.read(uint16((t + uint16(cpu.X))) & 0x00FF))
+	var hi uint16 = uint16(cpu.read(uint16((t + uint16(cpu.X) + 1)) & 0x00FF))
 
 	cpu.addrAbs = (hi << 8) | lo
 
@@ -433,7 +433,7 @@ func (cpu *CPU) adc() uint8 {
 	cpu.temp = uint16(cpu.A) + uint16(cpu.fetched) + uint16(cpu.getFlag(flagCarryBit))
 
 	cpu.setFlag(flagCarryBit, cpu.temp > 255)
-	cpu.setFlag(flagZero, (cpu.temp&0x00FF) != 0)
+	cpu.setFlag(flagZero, (cpu.temp&0x00FF) == 0)
 	// V = (A ^ R) & ~(A ^ M)
 	cpu.setFlag(flagOverflow, (^(uint16(cpu.A)^uint16(cpu.fetched))&(uint16(cpu.A)^uint16(cpu.temp)))&0x0080 != 0)
 	cpu.setFlag(flagNegative, cpu.temp&0x80 != 0)
@@ -445,12 +445,12 @@ func (cpu *CPU) adc() uint8 {
 func (cpu *CPU) sbc() uint8 {
 	cpu.fetch()
 
-	var value uint16 = uint16(cpu.fetched) ^ 0x00FF
+	var value uint16 = (uint16(cpu.fetched)) ^ 0x00FF
 
 	cpu.temp = uint16(cpu.A) + value + uint16(cpu.getFlag(flagCarryBit))
 	cpu.setFlag(flagCarryBit, cpu.temp&0xFF00 != 0)
-	cpu.setFlag(flagZero, cpu.temp&0x00FF != 0)
-	cpu.setFlag(flagOverflow, (cpu.temp^uint16(cpu.A)&(cpu.temp^value)&0x0080) != 0)
+	cpu.setFlag(flagZero, (cpu.temp&0x00FF) == 0)
+	cpu.setFlag(flagOverflow, (cpu.temp^uint16(cpu.A))&(cpu.temp^value)&0x0080 != 0)
 	cpu.setFlag(flagNegative, cpu.temp&0x0080 != 0)
 	cpu.A = uint8(cpu.temp & 0x00FF)
 
@@ -835,7 +835,7 @@ func (cpu *CPU) plp() uint8 {
 
 func (cpu *CPU) rol() uint8 {
 	cpu.fetch()
-	cpu.temp = uint16(uint16(cpu.fetched) << 1)
+	cpu.temp = (uint16(cpu.fetched) << 1) | uint16(cpu.getFlag(flagCarryBit))
 	cpu.setFlag(flagCarryBit, cpu.temp&0xFF00 != 0)
 	cpu.setFlag(flagZero, (cpu.temp&0x00FF) == 0x0000)
 	cpu.setFlag(flagNegative, cpu.temp&0x0080 != 0)

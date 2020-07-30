@@ -241,21 +241,7 @@ func (debug *debugger) Construct(filePath string, width int32, height int32) err
 func (debug *debugger) Update(elapsedTime int64) bool {
 	// Use double buffering technique to prevent flickering.
 
-	// Check if we have reach the end of a frame
-	if debug.emulationRun {
-		if debug.residualTime > 0 {
-			debug.residualTime -= elapsedTime
-		} else {
-			debug.residualTime += 1000/60 - elapsedTime
-			// Golang's do while.
-			for done := true; done; done = debug.bus.PPU.FrameComplete != true {
-				debug.bus.Clock()
-			}
-			debug.bus.PPU.FrameComplete = false
-		}
-	}
-
-	//Get user inputs.
+	// Get user inputs.
 	for event := sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
 		switch t := event.(type) {
 		case *sdl.QuitEvent:
@@ -264,6 +250,7 @@ func (debug *debugger) Update(elapsedTime int64) bool {
 			if !debug.inputLock {
 				switch t.Keysym.Sym {
 				// NES controller
+				// Bugged...
 				case sdl.K_s:
 					debug.bus.Controller[0] |= 0x10
 				case sdl.K_UP:
@@ -315,8 +302,21 @@ func (debug *debugger) Update(elapsedTime int64) bool {
 				} else if t.State == sdl.PRESSED {
 					debug.inputLock = true
 				}
-				debug.bus.Controller[0] |= 0x00
 			}
+		}
+	}
+
+	// Check if we have reach the end of a frame
+	if debug.emulationRun {
+		if debug.residualTime > 0 {
+			debug.residualTime -= elapsedTime
+		} else {
+			debug.residualTime += 1000/60 - elapsedTime
+			// Golang's do while.
+			for done := true; done; done = debug.bus.PPU.FrameComplete != true {
+				debug.bus.Clock()
+			}
+			debug.bus.PPU.FrameComplete = false
 		}
 	}
 
@@ -398,7 +398,7 @@ func main() {
 	fmt.Println("HELLO WORLD -ALLTALE-")
 	fmt.Println("With programming we have god's hand.")
 	debug := debugger{}
-	err := debug.Construct("./test/nestest.nes", windowWidth, windowHeight)
+	err := debug.Construct("./roms/smb.nes", windowWidth, windowHeight)
 	if err != nil {
 		return
 	}

@@ -40,14 +40,14 @@ const (
 )
 
 // Bitmask for PPU loppy register.
-// const (
-// 	loppyCoarseX    = 0x001F
-// 	loppyCoarseY    = 0x03E0
-// 	loppyNameTableX = (1 << 10)
-// 	loppyNameTableY = (1 << 11)
-// 	loppyFineY      = 0x7000
-// 	loppyUnused     = (1 << 15)
-// )
+const (
+	loppyCoarseX    = 0x001F
+	loppyCoarseY    = 0x03E0
+	loppyNameTableX = (1 << 10)
+	loppyNameTableY = (1 << 11)
+	loppyFineY      = 0x7000
+	loppyUnused     = (1 << 15)
+)
 
 // PPU Nintendo 2C02 PPU struct
 type PPU struct {
@@ -103,7 +103,7 @@ func ConnectPPU(bus *Bus) *PPU {
 	// but NES is only generating a frame with 256 cycles and 240 scanlines.
 	// So I doubled the frame size in both width and height so that the
 	// screen won't overflow.
-	ppu.screen, err = sdl.CreateRGBSurfaceWithFormat(0, 256*2, 240*2, 8, sdl.PIXELFORMAT_RGB888)
+	ppu.screen, err = sdl.CreateRGBSurfaceWithFormat(0, 256, 240, 8, sdl.PIXELFORMAT_RGB888)
 	if err != nil {
 		fmt.Printf("Failed to create sprite: %s\n", err)
 		panic(err)
@@ -175,11 +175,11 @@ func (ppu *PPU) setFlag(reg *uint8, f uint8, v bool) {
 }
 
 // Addr IO
-// DO NOT USE!
-// func (ppu *PPU) getLoppyRegister(addr *uint16, m int) uint16 {
-// 	return (*addr & uint16(m)) / uint16(m&-m)
-// }
+func (ppu *PPU) getLoppyRegister(addr *uint16, m int) uint16 {
+	return (*addr & uint16(m)) / uint16(m&-m)
+}
 
+// DO NOT USE!
 // func (ppu *PPU) setLoppyRegister(addr *uint16, m int, val uint8) {
 // 	*addr |= uint16(val) * uint16(m&-m)
 // }
@@ -506,32 +506,36 @@ func (ppu *PPU) Clock() {
 		if (ppu.cycle >= 2 && ppu.cycle <= 258) || (ppu.cycle >= 321 && ppu.cycle < 338) {
 			updateShifters()
 
-			switch ppu.cycle % 8 {
-			case 1:
+			switch (ppu.cycle - 1) % 8 {
+			case 0:
 				// Fetch next name table.
 				loadBackgroundShifters()
 				ppu.nextTileID = ppu.PPURead(0x2000 | (ppu.vramAddr & 0x0FFF))
-			case 3:
+			case 2:
 				// Fetch next attribute table.
-				v := ppu.vramAddr
-				addr := 0x23C0 | (v & 0x0C00) | ((v >> 4) & 0x38) | ((v >> 2) & 0x07)
-				shift := ((v >> 4) & 4) | (v & 2)
-				ppu.nextTileAttr = ((ppu.PPURead(addr) >> shift) & 3) << 2
-			case 5:
+				addr := (0x23C0 | (ppu.getLoppyRegister(&ppu.vramAddr, loppyNameTableY) << 11) |
+					(ppu.getLoppyRegister(&ppu.vramAddr, loppyNameTableX) << 10) |
+					((ppu.getLoppyRegister(&ppu.vramAddr, loppyCoarseY) >> 2) << 3) |
+					(ppu.getLoppyRegister(&ppu.vramAddr, loppyCoarseX) >> 2))
+				ppu.nextTileAttr = ppu.PPURead(addr)
+				if ppu.getLoppyRegister(&ppu.vramAddr, loppyCoarseY)&0x02 != 0 {
+					ppu.nextTileAttr >>= 4
+				}
+				if ppu.getLoppyRegister(&ppu.vramAddr, loppyCoarseX)&0x02 != 0 {
+					ppu.nextTileAttr >>= 2
+				}
+				ppu.nextTileAttr &= 0x03
+			case 4:
 				// Fetch LSB
-				fineY := (ppu.vramAddr >> 12) & 7
-				table := ppu.getFlag(&ppu.control, controlPatternBackground)
-				tile := ppu.nextTileID
-				address := 0x1000*uint16(table) + uint16(tile)*16 + fineY
-				ppu.nextTileLSB = ppu.PPURead(address + 0)
-			case 7:
+				ppu.nextTileLSB = ppu.PPURead((uint16(ppu.getFlag(&ppu.control, controlPatternBackground)) << 12) +
+					(uint16(ppu.nextTileID) << 4) +
+					ppu.getLoppyRegister(&ppu.vramAddr, loppyFineY) + 0)
+			case 6:
 				// Fetch MSB
-				fineY := (ppu.vramAddr >> 12) & 7
-				table := ppu.getFlag(&ppu.control, controlPatternBackground)
-				tile := ppu.nextTileID
-				address := 0x1000*uint16(table) + uint16(tile)*16 + fineY
-				ppu.nextTileMSB = ppu.PPURead(address + 8)
-			case 0:
+				ppu.nextTileMSB = ppu.PPURead((uint16(ppu.getFlag(&ppu.control, controlPatternBackground)) << 12) +
+					(uint16(ppu.nextTileID) << 4) +
+					ppu.getLoppyRegister(&ppu.vramAddr, loppyFineY) + 8)
+			case 7:
 				incrementScrollX()
 			}
 		}
@@ -594,8 +598,8 @@ func (ppu *PPU) Clock() {
 		bgPalette = (pal1 << 1) | pal0
 	}
 
-	if ppu.cycle <= 256 && ppu.scanline <= 240 {
-		ppu.screen.Set(int(ppu.cycle-1+1), int(ppu.scanline+1),
+	if ppu.cycle >= 0 && ppu.cycle < 256 && ppu.scanline >= 0 && ppu.scanline < 240 {
+		ppu.screen.Set(int(ppu.cycle-1), int(ppu.scanline),
 			ppu.GetColorFromPaletteRAM(bgPalette, bgPixel))
 	}
 
@@ -639,7 +643,7 @@ func (ppu *PPU) GetNameTable(i uint8) *sdl.Surface {
 
 // GetColorFromPaletteRAM Get a color from PPU internal palette RAM.
 func (ppu *PPU) GetColorFromPaletteRAM(palette uint8, pixel uint8) color.RGBA {
-	return ppu.palette[ppu.PPURead(0x3F00+(uint16(palette)<<2)+uint16(pixel))&0x003F]
+	return ppu.palette[ppu.PPURead(0x3F00+(uint16(palette)<<2)+uint16(pixel))&0x3F]
 }
 
 // GetPatternTable Get PPU internal pattern table.
