@@ -10,6 +10,13 @@ type Bus struct {
 
 	controllerState []uint8
 
+	dmaPage uint8
+	dmaAddr uint8
+	dmaData uint8
+
+	dmaTransfer bool
+	dmaDummy    bool
+
 	systemClockCounter uint32
 }
 
@@ -27,6 +34,7 @@ func NewBus() *Bus {
 	// Connect CPU to bus
 	bus.CPU = ConnectCPU(&bus)
 	bus.PPU = ConnectPPU(&bus)
+	bus.dmaDummy = false
 	return &bus
 }
 
@@ -65,6 +73,10 @@ func (bus *Bus) CPUWrite(addr uint16, data uint8) {
 		bus.CPURAM[addr&0x07FF] = data // addr&0x07FF yields back the geniune value after mirroring
 	} else if addr >= 0x2000 && addr < 0x3FFF {
 		bus.PPU.CPUWrite(addr&0x0007, data)
+	} else if addr == 0x4014 {
+		bus.dmaPage = data
+		bus.dmaAddr = 0x00
+		bus.dmaTransfer = true
 	} else if addr >= 0x4016 && addr <= 0x4017 {
 		bus.controllerState[addr&0x0001] = bus.Controller[addr&0x0001]
 	}
@@ -89,7 +101,26 @@ func (bus *Bus) Clock() {
 	bus.PPU.Clock()
 
 	if bus.systemClockCounter%3 == 0 {
-		bus.CPU.Clock()
+		if bus.dmaTransfer {
+			if bus.dmaDummy {
+				if bus.systemClockCounter%2 == 1 {
+					bus.dmaDummy = false
+				}
+			} else {
+				if bus.systemClockCounter%2 == 0 {
+					bus.dmaData = bus.CPURead(uint16(bus.dmaPage)<<8 | uint16(bus.dmaAddr))
+				} else {
+					bus.PPU.OAM[bus.dmaAddr] = bus.dmaData
+					bus.dmaAddr++
+					if bus.dmaAddr == 0x00 {
+						bus.dmaTransfer = false
+						bus.dmaDummy = true
+					}
+				}
+			}
+		} else {
+			bus.CPU.Clock()
+		}
 	}
 
 	if bus.PPU.NMI {

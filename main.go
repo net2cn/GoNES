@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/net2cn/GoNES/nes"
@@ -357,7 +358,16 @@ func (debug *debugger) Update(elapsedTime int64) bool {
 
 	// Draw CPU & ASM
 	debug.drawCPU(416, 2)
-	debug.drawASM(416, 72, 25)
+	// debug.drawASM(416, 72, 25)
+
+	// Draw DMA
+	for i := 0; i < 26; i++ {
+		s := nes.ConvertToHex(uint16(i), 2) + ": (" + strconv.Itoa(int(debug.bus.PPU.OAM[i*4+3])) + "," +
+			strconv.Itoa(int(debug.bus.PPU.OAM[i*4+0])) + ")" +
+			"ID: " + nes.ConvertToHex(uint16(debug.bus.PPU.OAM[i*4+1]), 2) +
+			"AT: " + nes.ConvertToHex(uint16(debug.bus.PPU.OAM[i*4+2]), 2)
+		debug.drawString(416, 72+i*10, s, &sdl.Color{R: 0, G: 255, B: 0, A: 0})
+	}
 
 	// Draw key hints.
 	debug.drawString(0, 362, "SPACE - Run/stop", &sdl.Color{R: 0, G: 255, B: 0, A: 0})
@@ -366,6 +376,12 @@ func (debug *debugger) Update(elapsedTime int64) bool {
 	debug.drawString(0, 392, "C - Step one instruction", &sdl.Color{R: 0, G: 255, B: 0, A: 0})
 	debug.drawString(0, 402, "D - Dump screen", &sdl.Color{R: 0, G: 255, B: 0, A: 0})
 	debug.drawString(0, 412, "P - Change palette", &sdl.Color{R: 0, G: 255, B: 0, A: 0})
+
+	fps := 0
+	if elapsedTime != 0 {
+		fps = int(1000 / elapsedTime)
+	}
+	debug.drawString(612, 2, "FPS: "+strconv.Itoa(fps), &sdl.Color{R: 0, G: 255, B: 0, A: 0})
 
 	// Swap buffer and present our rendered content.
 	debug.window.UpdateSurface()
@@ -398,7 +414,7 @@ func main() {
 	fmt.Println("HELLO WORLD -ALLTALE-")
 	fmt.Println("With programming we have god's hand.")
 	debug := debugger{}
-	err := debug.Construct("./roms/smb.nes", windowWidth, windowHeight)
+	err := debug.Construct("./roms/dk.nes", windowWidth, windowHeight)
 	if err != nil {
 		return
 	}

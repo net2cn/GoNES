@@ -10,7 +10,7 @@ import (
 // Bitmask for status register.
 const (
 	statusUnused         = 0x1F // Mask the unused register.
-	statusSpriteOverFlow = (1 << 5)
+	statusSpriteOverflow = (1 << 5)
 	statusSpriteZeroHit  = (1 << 6)
 	statusVerticalBlank  = (1 << 7)
 )
@@ -49,6 +49,13 @@ const (
 	loppyUnused     = (1 << 15)
 )
 
+const (
+	entryY = iota
+	entryID
+	entryAttribute
+	entryX
+)
+
 // PPU Nintendo 2C02 PPU struct
 type PPU struct {
 	cartridge *Cartridge
@@ -57,6 +64,12 @@ type PPU struct {
 	TableName    [2][1024]uint8
 	tablePattern [2][4096]uint8
 	tablePalette [32]uint8
+	OAM          [256]uint8
+
+	sprite                 [32]uint8
+	spriteCount            uint8
+	spriteShifterPatternLo [8]uint8
+	spriteShifterPatternHi [8]uint8
 
 	NMI bool
 
@@ -79,6 +92,7 @@ type PPU struct {
 
 	vramAddr uint16
 	tramAddr uint16
+	oamAddr  uint8
 
 	fineX uint8
 
@@ -210,7 +224,7 @@ func (ppu *PPU) CPURead(addr uint16, readOnly ...bool) uint8 {
 	case 0x0003: // OAM address
 
 	case 0x0004: // OAM data
-
+		data = ppu.OAM[ppu.oamAddr]
 	case 0x0005: // Scroll
 
 	case 0x0006: // PPU address
@@ -246,9 +260,9 @@ func (ppu *PPU) CPUWrite(addr uint16, data uint8) {
 	case 0x0002: // Status
 
 	case 0x0003: // OAM address
-
+		ppu.oamAddr = data
 	case 0x0004: // OAM data
-
+		ppu.OAM[ppu.oamAddr] = data
 	case 0x0005: // Scroll
 		if ppu.addressLatch == 0 {
 			ppu.fineX = data & 0x07
@@ -492,6 +506,17 @@ func (ppu *PPU) Clock() {
 			ppu.shifterAttribLo <<= 1
 			ppu.shifterAttribHi <<= 1
 		}
+
+		if ppu.getFlag(&ppu.mask, maskRenderSprites) != 0 && ppu.cycle >= 1 && ppu.cycle < 258 {
+			for i := uint8(0); i < ppu.spriteCount; i++ {
+				if ppu.sprite[i*4+3] > 0 {
+					ppu.sprite[i*4+3]--
+				} else {
+					ppu.spriteShifterPatternLo[i] <<= 1
+					ppu.spriteShifterPatternHi[i] <<= 1
+				}
+			}
+		}
 	}
 
 	if ppu.scanline >= -1 && ppu.scanline < 240 {
@@ -501,6 +526,12 @@ func (ppu *PPU) Clock() {
 
 		if ppu.scanline == -1 && ppu.cycle == 1 {
 			ppu.setFlag(&ppu.status, statusVerticalBlank, false)
+			ppu.setFlag(&ppu.status, statusSpriteOverflow, false)
+
+			for i := 0; i < 8; i++ {
+				ppu.spriteShifterPatternLo[i] = 0
+				ppu.spriteShifterPatternHi[i] = 0
+			}
 		}
 
 		if (ppu.cycle >= 2 && ppu.cycle <= 258) || (ppu.cycle >= 321 && ppu.cycle < 338) {
@@ -549,12 +580,129 @@ func (ppu *PPU) Clock() {
 			transferAddressX()
 		}
 
+		if ppu.scanline == -1 && ppu.cycle >= 280 && ppu.cycle < 305 {
+			transferAddressY()
+		}
+
 		if ppu.cycle == 338 || ppu.cycle == 340 {
 			ppu.nextTileID = ppu.PPURead(0x2000 | (ppu.vramAddr & 0x0FFF))
 		}
 
-		if ppu.scanline == -1 && ppu.cycle >= 280 && ppu.cycle < 305 {
-			transferAddressY()
+		// Sprite Evaluation
+		if ppu.cycle == 257 && ppu.scanline >= 0 {
+			// memset 0xFF
+			ppu.sprite[0] = 0xFF
+			for i := 1; i < len(ppu.sprite); i *= 2 {
+				copy(ppu.sprite[i:], ppu.sprite[:i])
+			}
+			ppu.spriteCount = 0
+
+			for i := 0; i < 8; i++ {
+				ppu.spriteShifterPatternLo[i] = 0
+				ppu.spriteShifterPatternHi[i] = 0
+			}
+
+			var h int16
+			if ppu.getFlag(&ppu.control, controlSpriteSize) == 0 {
+				h = 8
+			} else {
+				h = 16
+			}
+			count := 0
+			for count < 64 && ppu.spriteCount < 9 {
+				var diff int16 = (int16(ppu.scanline) - int16(ppu.OAM[count*4+entryY]))
+				if diff >= 0 && diff < h {
+					if count < 8 {
+						if count == 0 {
+
+						}
+						copy(ppu.sprite[ppu.spriteCount*4:ppu.spriteCount*4+4], ppu.OAM[count*4:count*4+4])
+						ppu.spriteCount++
+					}
+				}
+				count++
+			}
+			if ppu.spriteCount > 8 {
+				ppu.setFlag(&ppu.status, statusSpriteOverflow, true)
+			}
+		}
+
+		if ppu.cycle == 340 {
+			for i := uint8(0); i < ppu.spriteCount; i++ {
+				var spritePatternBitsLo, spritePatternBitsHi uint8
+				var spritePatternAddrLo, spritePatternAddrHi uint16
+
+				if ppu.getFlag(&ppu.control, controlSpriteSize) == 0 {
+					// 8x8
+					if (ppu.sprite[i*4+entryAttribute] & 0x80) == 0 {
+						// Normal
+						spritePatternAddrLo =
+							(uint16(ppu.getFlag(&ppu.control, controlPatternSprite)) << 12) |
+								(uint16(ppu.sprite[i*4+entryID]) << 4) |
+								(uint16(ppu.scanline) - uint16(ppu.sprite[i*4+entryID]))
+
+					} else {
+						// Flipped
+						spritePatternAddrLo =
+							(uint16(ppu.getFlag(&ppu.control, controlPatternSprite)) << 12) |
+								(uint16(ppu.sprite[i*4+1]) << 4) |
+								(7 - uint16(ppu.scanline) - uint16(ppu.sprite[i*4+entryID]))
+					}
+				} else {
+					// 8x16
+					if (ppu.sprite[i*4+entryAttribute] & 0x80) == 0 {
+						// Normal
+						if (uint8(ppu.scanline) - ppu.sprite[i*4+entryY]) < 8 {
+							// Top half tile
+							spritePatternAddrLo =
+								(uint16(ppu.sprite[i*4+entryID]&0x01) << 12) |
+									(uint16(ppu.sprite[i*4+entryID]&0xFE) << 4) |
+									(uint16(uint16(ppu.scanline)-uint16(ppu.sprite[i*4+entryY])) & 0x07)
+						} else {
+							// Bottom half tile
+							spritePatternAddrLo =
+								(uint16(ppu.sprite[i*4+entryID]&0x01) << 12) |
+									((uint16(ppu.sprite[i*4+entryID]&0xFE) + 1) << 4) |
+									(uint16(uint16(ppu.scanline)-uint16(ppu.sprite[i*4+entryY])) & 0x07)
+						}
+					} else {
+						// Flipped
+						if (uint8(ppu.scanline) - ppu.sprite[i*4+0]) < 8 {
+							// Top half tile
+							spritePatternAddrLo =
+								(uint16(ppu.sprite[i*4+entryID]&0x01) << 12) |
+									((uint16(ppu.sprite[i*4+entryID]&0xFE) + 1) << 4) |
+									(uint16(7-uint16(ppu.scanline)-uint16(ppu.sprite[i*4+entryY])) & 0x07)
+						} else {
+							// Bottom half tile
+							spritePatternAddrLo =
+								(uint16(ppu.sprite[i*4+entryID]&0x01) << 12) |
+									(uint16(ppu.sprite[i*4+entryID]&0xFE) << 4) |
+									(uint16(7-uint16(ppu.scanline)-uint16(ppu.sprite[i*4+entryY])) & 0x07)
+						}
+					}
+				}
+
+				spritePatternAddrHi = spritePatternAddrLo + 8
+
+				spritePatternBitsLo = ppu.PPURead(spritePatternAddrLo)
+				spritePatternBitsHi = ppu.PPURead(spritePatternAddrHi)
+
+				if ppu.sprite[i*4+2]&0x40 != 0 {
+					var flipByte func(b uint8) uint8 = func(b uint8) uint8 {
+						b = (b&0xF0)>>4 | (b&0x0F)<<4
+						b = (b&0xCC)>>2 | (b&0x33)<<2
+						b = (b&0xAA)>>1 | (b&0x55)<<1
+						return b
+					}
+
+					spritePatternBitsLo = flipByte(spritePatternBitsLo)
+					spritePatternBitsHi = flipByte(spritePatternBitsHi)
+				}
+
+				ppu.spriteShifterPatternLo[i] = spritePatternBitsLo
+				ppu.spriteShifterPatternHi[i] = spritePatternBitsHi
+			}
 		}
 	}
 
@@ -571,6 +719,7 @@ func (ppu *PPU) Clock() {
 		}
 	}
 
+	// Render screen
 	var bgPixel uint8 = 0x00
 	var bgPalette uint8 = 0x00
 
@@ -598,9 +747,60 @@ func (ppu *PPU) Clock() {
 		bgPalette = (pal1 << 1) | pal0
 	}
 
+	var fgPixel uint8 = 0x00
+	var fgPalette uint8 = 0x00
+	var fgPriority uint8 = 0x00
+
+	if ppu.getFlag(&ppu.mask, maskRenderSprites) != 0 {
+		for i := uint8(0); i < ppu.spriteCount; i++ {
+			if ppu.sprite[i*4+entryX] == 0 {
+				var fgPixelLo uint8 = 0
+				if ppu.spriteShifterPatternLo[i]&0x80 > 0 {
+					fgPixelLo = 1
+				}
+				var fgPixelHi uint8 = 0
+				if ppu.spriteShifterPatternHi[i]&0x80 > 0 {
+					fgPixelLo = 1
+				}
+				fgPixel = (fgPixelHi << 1) | fgPixelLo
+
+				fgPalette = (ppu.sprite[i*4+entryAttribute] & 0x03) + 0x04
+				if (ppu.sprite[i*4+entryAttribute] & 0x20) != 0 {
+					fgPriority = 1
+				}
+
+				if fgPixel != 0 {
+					break
+				}
+			}
+		}
+	}
+
+	var pixel uint8 = 0x00
+	var palette uint8 = 0x00
+
+	if bgPixel == 0 && fgPixel == 0 {
+		pixel = 0x00
+		palette = 0x00
+	} else if bgPixel == 0 && fgPixel > 0 {
+		pixel = fgPixel
+		palette = fgPalette
+	} else if bgPixel > 0 && fgPixel == 0 {
+		pixel = bgPixel
+		palette = bgPalette
+	} else if bgPixel > 0 && fgPixel > 0 {
+		if fgPriority != 0 {
+			pixel = fgPixel
+			palette = fgPalette
+		} else {
+			pixel = bgPixel
+			palette = bgPalette
+		}
+	}
+
 	if ppu.cycle >= 0 && ppu.cycle < 256 && ppu.scanline >= 0 && ppu.scanline < 240 {
 		ppu.screen.Set(int(ppu.cycle-1), int(ppu.scanline),
-			ppu.GetColorFromPaletteRAM(bgPalette, bgPixel))
+			ppu.GetColorFromPaletteRAM(palette, pixel))
 	}
 
 	// Draw old-fashioned static noise.
@@ -657,7 +857,7 @@ func (ppu *PPU) GetPatternTable(i uint8, palette uint8) *sdl.Surface {
 				var tileMSB uint8 = ppu.PPURead(uint16(uint16(i)*0x1000 + offset + uint16(row) + 0x0008))
 
 				for col := 0; col < 8; col++ {
-					var pixel uint8 = (tileLSB & 0x01) + (tileMSB & 0x01)
+					var pixel uint8 = ((tileLSB & 0x01) << 1) | (tileMSB & 0x01)
 					tileLSB >>= 1
 					tileMSB >>= 1
 
