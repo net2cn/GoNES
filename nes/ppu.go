@@ -105,6 +105,9 @@ type PPU struct {
 	shifterPatternHi uint16
 	shifterAttribLo  uint16
 	shifterAttribHi  uint16
+
+	spriteZeroHitPossible   bool
+	spriteZeroBeingRendered bool
 }
 
 // ConnectPPU Initialize a PPU and connect it to the bus.
@@ -526,6 +529,7 @@ func (ppu *PPU) Clock() {
 
 		if ppu.scanline == -1 && ppu.cycle == 1 {
 			ppu.setFlag(&ppu.status, statusVerticalBlank, false)
+			ppu.setFlag(&ppu.status, statusSpriteZeroHit, false)
 			ppu.setFlag(&ppu.status, statusSpriteOverflow, false)
 
 			for i := 0; i < 8; i++ {
@@ -603,6 +607,7 @@ func (ppu *PPU) Clock() {
 			}
 
 			count := 0
+			ppu.spriteZeroHitPossible = false
 			for count < 64 && ppu.spriteCount < 9 {
 				var diff int16 = (int16(ppu.scanline) - int16(ppu.OAM[count*4+entryY]))
 				var spriteSize int16 = 16
@@ -613,7 +618,7 @@ func (ppu *PPU) Clock() {
 				if diff >= 0 && diff < spriteSize {
 					if ppu.spriteCount < 8 {
 						if count == 0 {
-
+							ppu.spriteZeroHitPossible = true
 						}
 						copy(ppu.sprite[ppu.spriteCount*4:ppu.spriteCount*4+4], ppu.OAM[count*4:count*4+4])
 						ppu.spriteCount++
@@ -751,6 +756,8 @@ func (ppu *PPU) Clock() {
 	var fgPriority uint8 = 0x00
 
 	if ppu.getFlag(&ppu.mask, maskRenderSprites) != 0 {
+		ppu.spriteZeroBeingRendered = false
+
 		for i := uint8(0); i < ppu.spriteCount; i++ {
 			if ppu.sprite[i*4+entryX] == 0 {
 				var fgPixelLo uint8 = 0
@@ -769,12 +776,16 @@ func (ppu *PPU) Clock() {
 				}
 
 				if fgPixel != 0 {
+					if i == 0 { // Check if the sprite is sprite zero.
+						ppu.spriteZeroBeingRendered = true
+					}
 					break
 				}
 			}
 		}
 	}
 
+	// Background & foreground competition
 	var pixel uint8 = 0x00
 	var palette uint8 = 0x00
 
@@ -794,6 +805,23 @@ func (ppu *PPU) Clock() {
 		} else {
 			pixel = bgPixel
 			palette = bgPalette
+		}
+
+		if ppu.spriteZeroHitPossible && ppu.spriteZeroBeingRendered {
+			// Make sure we render both background and foreground.
+			if ppu.getFlag(&ppu.mask, maskRenderBackground) != 0 &&
+				ppu.getFlag(&ppu.mask, maskRenderSprites) != 0 {
+				if ^(ppu.getFlag(&ppu.mask, maskRenderBackgroundLeft) |
+					ppu.getFlag(&ppu.mask, maskRenderSpritesLeft)) != 0 {
+					if ppu.cycle >= 9 && ppu.cycle < 258 {
+						ppu.setFlag(&ppu.status, statusSpriteZeroHit, true)
+					}
+				} else {
+					if ppu.cycle >= 1 && ppu.cycle < 258 {
+						ppu.setFlag(&ppu.status, statusSpriteZeroHit, true)
+					}
+				}
+			}
 		}
 	}
 

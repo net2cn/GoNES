@@ -435,7 +435,7 @@ func main() {
 
 	// Construct a debugger instance.
 	debug := debugger{}
-	err := debug.Construct("./roms/ic.nes", windowWidth, windowHeight)
+	err := debug.Construct("./roms/smb.nes", windowWidth, windowHeight)
 	if err != nil {
 		return
 	}
