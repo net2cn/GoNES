@@ -1039,7 +1039,7 @@ func (cpu *CPU) Complete() bool {
 	return cpu.cycles == 0
 }
 
-// Disassemble Converts 6502 binary to human readable 6502 assembly. It also returns the last value of the map.
+// Disassemble Converts 6502 binary to human readable 6502 assembly.
 func (cpu *CPU) Disassemble(nStart uint16, nStop uint16) map[uint16]string {
 	var addr uint32 = uint32(nStart)
 	var value, hi, lo uint8 = 0x00, 0x00, 0x00

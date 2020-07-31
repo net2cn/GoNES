@@ -20,6 +20,7 @@ var fontPath string = "./ui/assets/UbuntuMono-R.ttf" // Man, do not use a variab
 var fontSize int = 15
 var windowWidth, windowHeight int32 = 680, 480
 
+// Timer.
 var startTime time.Time = time.Now()
 var endTime time.Time = time.Now()
 
@@ -64,10 +65,12 @@ func (debug *debugger) drawString(x int, y int, str string, color *sdl.Color) {
 	}
 }
 
+// Draw a full sprite.
 func (debug *debugger) drawSprite(x int, y int, sprite *sdl.Surface) {
 	sprite.Blit(nil, debug.buffer, &sdl.Rect{X: int32(x), Y: int32(y)})
 }
 
+// Draw a part of sprite.
 func (debug *debugger) drawPartialSprite(dstX int, dstY int, sprite *sdl.Surface, srcX int, srcY int, w int, h int) {
 	dstRect := sdl.Rect{X: int32(dstX), Y: int32(dstY), W: int32(w), H: int32(h)}
 	srcRect := sdl.Rect{X: int32(srcX), Y: int32(srcY), W: int32(w), H: int32(h)}
@@ -75,13 +78,13 @@ func (debug *debugger) drawPartialSprite(dstX int, dstY int, sprite *sdl.Surface
 }
 
 // Draw out our RAM layouts.
-func (debug *debugger) drawRAM(x int, y int, nAddr uint16, nRows int, nColumns int) {
+func (debug *debugger) drawRAM(x int, y int, addr uint16, rows int, columns int) {
 	var nRAMX, nRAMY int = x, y
-	for row := 0; row < nRows; row++ {
-		sOffset := "$" + nes.ConvertToHex(nAddr, 4) + ":"
-		for col := 0; col < nColumns; col++ {
-			sOffset += " " + nes.ConvertToHex(uint16(debug.bus.CPURead(nAddr, true)), 2)
-			nAddr++
+	for row := 0; row < rows; row++ {
+		sOffset := "$" + nes.ConvertToHex(addr, 4) + ":"
+		for col := 0; col < columns; col++ {
+			sOffset += " " + nes.ConvertToHex(uint16(debug.bus.CPURead(addr, true)), 2)
+			addr++
 		}
 		debug.drawString(nRAMX, nRAMY, sOffset, &sdl.Color{R: 0, G: 255, B: 0, A: 0})
 		nRAMY += 10
@@ -109,14 +112,15 @@ func (debug *debugger) drawCPU(x int, y int) {
 }
 
 // Draw disassembled code.
-func (debug *debugger) drawASM(x int, y int, nLines int) {
+func (debug *debugger) drawASM(x int, y int, lines int) {
 	// I hate it without sorted map. Lots of hacky stuffs happen here.
+	// Draw backwards.
 	itA := debug.mapASM[debug.bus.CPU.PC]
-	var nLineY int = (nLines>>1)*10 + y
+	var nLineY int = (lines>>1)*10 + y
 	var idx int = sort.SearchInts(debug.mapKeys, int(debug.bus.CPU.PC))
 	if itA != debug.mapASM[uint16(debug.mapKeys[len(debug.mapKeys)-1])] {
 		debug.drawString(x, nLineY, itA, &sdl.Color{R: 255, G: 255, B: 0, A: 0})
-		for nLineY < (nLines*10)+y {
+		for nLineY < (lines*10)+y {
 			nLineY += 10
 			idx++
 			if idx != len(debug.mapKeys)-1 {
@@ -124,8 +128,9 @@ func (debug *debugger) drawASM(x int, y int, nLines int) {
 			}
 		}
 	}
+	// Draw forwards.
 	idx = sort.SearchInts(debug.mapKeys, int(debug.bus.CPU.PC))
-	nLineY = (nLines>>1)*10 + y
+	nLineY = (lines>>1)*10 + y
 	if itA != debug.mapASM[uint16(debug.mapKeys[len(debug.mapKeys)-1])] {
 		debug.drawString(x, nLineY, itA, &sdl.Color{R: 255, G: 255, B: 0, A: 0})
 		for nLineY > y {
@@ -136,6 +141,18 @@ func (debug *debugger) drawASM(x int, y int, nLines int) {
 				debug.drawString(x, nLineY, debug.mapASM[uint16(debug.mapKeys[idx])], &sdl.Color{R: 0, G: 255, B: 0, A: 0})
 			}
 		}
+	}
+}
+
+// Draw DMA state.
+func (debug *debugger) drawDMA(x int, y int, lines int) {
+	// Draw DMA
+	for i := 0; i < lines; i++ {
+		s := nes.ConvertToHex(uint16(i), 2) + ": (" + strconv.Itoa(int(debug.bus.PPU.OAM[i*4+3])) + "," +
+			strconv.Itoa(int(debug.bus.PPU.OAM[i*4+0])) + ")" +
+			" ID: " + nes.ConvertToHex(uint16(debug.bus.PPU.OAM[i*4+1]), 2) +
+			" AT: " + nes.ConvertToHex(uint16(debug.bus.PPU.OAM[i*4+2]), 2)
+		debug.drawString(x, y+i*10, s, &sdl.Color{R: 0, G: 255, B: 0, A: 0})
 	}
 }
 
@@ -225,10 +242,12 @@ func (debug *debugger) Construct(filePath string, width int32, height int32) err
 	debug.mapASM = debug.bus.CPU.Disassemble(0x0000, 0xFFFF)
 
 	// Create a collection of keys so that we can iter over.
+	// This is because Golang does not provide a sortable map. (They use hashmap instead of rb tree, which truly ummmms me.)
 	debug.mapKeys = make([]int, 0)
 	for k := range debug.mapASM {
 		debug.mapKeys = append(debug.mapKeys, int(k))
 	}
+	// Sort our map keys to make sure it is in order so that we can consturct our tricky iterator.
 	sort.Ints(debug.mapKeys)
 
 	debug.bus.Reset()
@@ -241,6 +260,12 @@ func (debug *debugger) Construct(filePath string, width int32, height int32) err
 
 func (debug *debugger) Update(elapsedTime int64) bool {
 	// Use double buffering technique to prevent flickering.
+	// Render sequence:
+	// Acquire inputs,
+	// Emulate,
+	// Rneder to buffer,
+	// Swap screen and buffer (present),
+	// Clear buffer for next round.
 
 	// Get user inputs.
 	for event := sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
@@ -361,13 +386,7 @@ func (debug *debugger) Update(elapsedTime int64) bool {
 	// debug.drawASM(416, 72, 25)
 
 	// Draw DMA
-	for i := 0; i < 26; i++ {
-		s := nes.ConvertToHex(uint16(i), 2) + ": (" + strconv.Itoa(int(debug.bus.PPU.OAM[i*4+3])) + "," +
-			strconv.Itoa(int(debug.bus.PPU.OAM[i*4+0])) + ")" +
-			"ID: " + nes.ConvertToHex(uint16(debug.bus.PPU.OAM[i*4+1]), 2) +
-			"AT: " + nes.ConvertToHex(uint16(debug.bus.PPU.OAM[i*4+2]), 2)
-		debug.drawString(416, 72+i*10, s, &sdl.Color{R: 0, G: 255, B: 0, A: 0})
-	}
+	debug.drawDMA(416, 72, 25)
 
 	// Draw key hints.
 	debug.drawString(0, 362, "SPACE - Run/stop", &sdl.Color{R: 0, G: 255, B: 0, A: 0})
@@ -413,10 +432,14 @@ func main() {
 	// I really enjoy its graphics. I mean the anime movie.
 	fmt.Println("HELLO WORLD -ALLTALE-")
 	fmt.Println("With programming we have god's hand.")
+
+	// Construct a debugger instance.
 	debug := debugger{}
-	err := debug.Construct("./roms/dk.nes", windowWidth, windowHeight)
+	err := debug.Construct("./roms/ic.nes", windowWidth, windowHeight)
 	if err != nil {
 		return
 	}
+
+	// Start debugger.
 	debug.Start()
 }
