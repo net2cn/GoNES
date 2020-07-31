@@ -1,8 +1,11 @@
 package main
 
 import (
+	"flag"
 	"fmt"
+	"log"
 	"os"
+	"runtime/pprof"
 	"sort"
 	"strconv"
 	"time"
@@ -16,13 +19,14 @@ import (
 
 // SDL2 variables
 var windowTitle string = "GoNES SDL2"
-var fontPath string = "./ui/assets/UbuntuMono-R.ttf" // Man, do not use a variable-width font! It looks too ugly with that!
+var fontPath string = "./assets/UbuntuMono-R.ttf" // Man, do not use a variable-width font! It looks too ugly with that!
 var fontSize int = 15
 var windowWidth, windowHeight int32 = 680, 480
 
 // Timer.
 var startTime time.Time = time.Now()
 var endTime time.Time = time.Now()
+var elapsedTime int64 = 0
 
 type debugger struct {
 	bus  *nes.Bus
@@ -267,7 +271,59 @@ func (debug *debugger) Update(elapsedTime int64) bool {
 	// Swap screen and buffer (present),
 	// Clear buffer for next round.
 
-	// Get user inputs.
+	// Get NES controller inputs.
+	keyState := sdl.GetKeyboardState()
+
+	debug.bus.Controller[0] = 0x00
+	if keyState[sdl.SCANCODE_X] != 0 {
+		debug.bus.Controller[0] |= 0x80
+	} else {
+		debug.bus.Controller[0] |= 0x00
+	}
+
+	if keyState[sdl.SCANCODE_Z] != 0 {
+		debug.bus.Controller[0] |= 0x40
+	} else {
+		debug.bus.Controller[0] |= 0x00
+	}
+
+	if keyState[sdl.SCANCODE_A] != 0 {
+		debug.bus.Controller[0] |= 0x20
+	} else {
+		debug.bus.Controller[0] |= 0x00
+	}
+
+	if keyState[sdl.SCANCODE_S] != 0 {
+		debug.bus.Controller[0] |= 0x10
+	} else {
+		debug.bus.Controller[0] |= 0x00
+	}
+
+	if keyState[sdl.SCANCODE_UP] != 0 {
+		debug.bus.Controller[0] |= 0x08
+	} else {
+		debug.bus.Controller[0] |= 0x00
+	}
+
+	if keyState[sdl.SCANCODE_DOWN] != 0 {
+		debug.bus.Controller[0] |= 0x04
+	} else {
+		debug.bus.Controller[0] |= 0x00
+	}
+
+	if keyState[sdl.SCANCODE_LEFT] != 0 {
+		debug.bus.Controller[0] |= 0x02
+	} else {
+		debug.bus.Controller[0] |= 0x00
+	}
+
+	if keyState[sdl.SCANCODE_RIGHT] != 0 {
+		debug.bus.Controller[0] |= 0x01
+	} else {
+		debug.bus.Controller[0] |= 0x00
+	}
+
+	// Get debugger inputs.
 	for event := sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
 		switch t := event.(type) {
 		case *sdl.QuitEvent:
@@ -275,18 +331,6 @@ func (debug *debugger) Update(elapsedTime int64) bool {
 		case *sdl.KeyboardEvent:
 			if !debug.inputLock {
 				switch t.Keysym.Sym {
-				// NES controller
-				// Bugged...
-				case sdl.K_s:
-					debug.bus.Controller[0] |= 0x10
-				case sdl.K_UP:
-					debug.bus.Controller[0] |= 0x08
-				case sdl.K_DOWN:
-					debug.bus.Controller[0] |= 0x04
-				case sdl.K_LEFT:
-					debug.bus.Controller[0] |= 0x02
-				case sdl.K_RIGHT:
-					debug.bus.Controller[0] |= 0x01
 				// Debug utility.
 				case sdl.K_c:
 					// Golang's do while.
@@ -321,8 +365,10 @@ func (debug *debugger) Update(elapsedTime int64) bool {
 
 			// Anti-jittering
 			if t.Repeat > 0 {
+				// Held.
 				debug.inputLock = false
 			} else {
+				// Pressed once.
 				if t.State == sdl.RELEASED {
 					debug.inputLock = false
 				} else if t.State == sdl.PRESSED {
@@ -337,7 +383,7 @@ func (debug *debugger) Update(elapsedTime int64) bool {
 		if debug.residualTime > 0 {
 			debug.residualTime -= elapsedTime
 		} else {
-			debug.residualTime += 1000/60 - elapsedTime
+			debug.residualTime += 1000000/60 - elapsedTime
 			// Golang's do while.
 			for done := true; done; done = debug.bus.PPU.FrameComplete != true {
 				debug.bus.Clock()
@@ -389,18 +435,23 @@ func (debug *debugger) Update(elapsedTime int64) bool {
 	debug.drawDMA(416, 72, 25)
 
 	// Draw key hints.
-	debug.drawString(0, 362, "SPACE - Run/stop", &sdl.Color{R: 0, G: 255, B: 0, A: 0})
-	debug.drawString(0, 372, "R - Reset", &sdl.Color{R: 0, G: 255, B: 0, A: 0})
-	debug.drawString(0, 382, "F - Step one frame", &sdl.Color{R: 0, G: 255, B: 0, A: 0})
-	debug.drawString(0, 392, "C - Step one instruction", &sdl.Color{R: 0, G: 255, B: 0, A: 0})
-	debug.drawString(0, 402, "D - Dump screen", &sdl.Color{R: 0, G: 255, B: 0, A: 0})
-	debug.drawString(0, 412, "P - Change palette", &sdl.Color{R: 0, G: 255, B: 0, A: 0})
+	debug.drawString(2, 306, "NES", &sdl.Color{R: 255, G: 255, B: 0, A: 0})
+	debug.drawString(2, 316, "Z - A", &sdl.Color{R: 0, G: 255, B: 0, A: 0})
+	debug.drawString(2, 326, "X - B", &sdl.Color{R: 0, G: 255, B: 0, A: 0})
+	debug.drawString(2, 336, "A - Select", &sdl.Color{R: 0, G: 255, B: 0, A: 0})
+	debug.drawString(2, 346, "S - Start", &sdl.Color{R: 0, G: 255, B: 0, A: 0})
+	debug.drawString(2, 356, "UP - Up", &sdl.Color{R: 0, G: 255, B: 0, A: 0})
+	debug.drawString(2, 366, "DOWN - Down", &sdl.Color{R: 0, G: 255, B: 0, A: 0})
+	debug.drawString(2, 376, "LEFT - Left", &sdl.Color{R: 0, G: 255, B: 0, A: 0})
+	debug.drawString(2, 386, "RIGHT - Right", &sdl.Color{R: 0, G: 255, B: 0, A: 0})
 
-	fps := 0
-	if elapsedTime != 0 {
-		fps = int(1000 / elapsedTime)
-	}
-	debug.drawString(612, 2, "FPS: "+strconv.Itoa(fps), &sdl.Color{R: 0, G: 255, B: 0, A: 0})
+	debug.drawString(2, 406, "Debugger", &sdl.Color{R: 255, G: 255, B: 0, A: 0})
+	debug.drawString(2, 416, "SPACE - Run/stop", &sdl.Color{R: 0, G: 255, B: 0, A: 0})
+	debug.drawString(2, 426, "R - Reset", &sdl.Color{R: 0, G: 255, B: 0, A: 0})
+	debug.drawString(2, 436, "F - Step one frame", &sdl.Color{R: 0, G: 255, B: 0, A: 0})
+	debug.drawString(2, 446, "C - Step one instruction", &sdl.Color{R: 0, G: 255, B: 0, A: 0})
+	debug.drawString(2, 456, "D - Dump screen", &sdl.Color{R: 0, G: 255, B: 0, A: 0})
+	debug.drawString(2, 466, "P - Change palette", &sdl.Color{R: 0, G: 255, B: 0, A: 0})
 
 	// Swap buffer and present our rendered content.
 	debug.window.UpdateSurface()
@@ -414,28 +465,56 @@ func (debug *debugger) Update(elapsedTime int64) bool {
 }
 
 func (debug *debugger) Start() {
-	elapsedTime := startTime.Sub(endTime).Milliseconds()
+	var passedTime int64 = 0
+	var passedFrame int64 = 0
 
 	running := true
 	for running {
 		startTime = time.Now()
 		running = debug.Update(elapsedTime)
 		endTime = time.Now()
-		elapsedTime = endTime.Sub(startTime).Milliseconds()
-	}
+		elapsedTime = endTime.Sub(startTime).Microseconds()
 
+		passedTime += elapsedTime
+		passedFrame++
+		if passedTime >= 1000000 {
+			debug.window.SetTitle(windowTitle + " FPS: " + strconv.Itoa(int(1000000/(passedTime/passedFrame))))
+			passedTime = 0
+			passedFrame = 0
+		}
+	}
 }
 
 func main() {
 	fmt.Println(windowTitle)
-
 	// I really enjoy its graphics. I mean the anime movie.
 	fmt.Println("HELLO WORLD -ALLTALE-")
 	fmt.Println("With programming we have god's hand.")
 
+	// Read flags
+	var file = flag.String("file", "", "NES ROM file")
+	var cpuprofile = flag.String("cpuprofile", "", "Write cpu profile to file")
+
+	flag.Parse()
+
+	// Handle flags
+	if *file == "" {
+		fmt.Println("Please specify a NES ROM file.")
+		os.Exit(1)
+	}
+
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
+	}
+
 	// Construct a debugger instance.
 	debug := debugger{}
-	err := debug.Construct("./roms/smb.nes", windowWidth, windowHeight)
+	err := debug.Construct(*file, windowWidth, windowHeight)
 	if err != nil {
 		return
 	}
