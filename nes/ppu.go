@@ -602,17 +602,16 @@ func (ppu *PPU) Clock() {
 				ppu.spriteShifterPatternHi[i] = 0
 			}
 
-			var h int16
-			if ppu.getFlag(&ppu.control, controlSpriteSize) == 0 {
-				h = 8
-			} else {
-				h = 16
-			}
 			count := 0
 			for count < 64 && ppu.spriteCount < 9 {
 				var diff int16 = (int16(ppu.scanline) - int16(ppu.OAM[count*4+entryY]))
-				if diff >= 0 && diff < h {
-					if count < 8 {
+				var spriteSize int16 = 16
+
+				if ppu.getFlag(&ppu.control, controlSpriteSize) == 0 {
+					spriteSize = 8
+				}
+				if diff >= 0 && diff < spriteSize {
+					if ppu.spriteCount < 8 {
 						if count == 0 {
 
 						}
@@ -639,14 +638,14 @@ func (ppu *PPU) Clock() {
 						spritePatternAddrLo =
 							(uint16(ppu.getFlag(&ppu.control, controlPatternSprite)) << 12) |
 								(uint16(ppu.sprite[i*4+entryID]) << 4) |
-								(uint16(ppu.scanline) - uint16(ppu.sprite[i*4+entryID]))
+								(uint16(ppu.scanline) - uint16(ppu.sprite[i*4+entryY]))
 
 					} else {
 						// Flipped
 						spritePatternAddrLo =
 							(uint16(ppu.getFlag(&ppu.control, controlPatternSprite)) << 12) |
-								(uint16(ppu.sprite[i*4+1]) << 4) |
-								(7 - uint16(ppu.scanline) - uint16(ppu.sprite[i*4+entryID]))
+								((uint16(ppu.sprite[i*4+entryID]) + 1) << 4) |
+								(7 - uint16(ppu.scanline) - uint16(ppu.sprite[i*4+entryY]))
 					}
 				} else {
 					// 8x16
@@ -656,13 +655,13 @@ func (ppu *PPU) Clock() {
 							// Top half tile
 							spritePatternAddrLo =
 								(uint16(ppu.sprite[i*4+entryID]&0x01) << 12) |
-									(uint16(ppu.sprite[i*4+entryID]&0xFE) << 4) |
+									(uint16(ppu.sprite[i*4+entryID]) & 0xFE << 4) |
 									(uint16(uint16(ppu.scanline)-uint16(ppu.sprite[i*4+entryY])) & 0x07)
 						} else {
 							// Bottom half tile
 							spritePatternAddrLo =
 								(uint16(ppu.sprite[i*4+entryID]&0x01) << 12) |
-									((uint16(ppu.sprite[i*4+entryID]&0xFE) + 1) << 4) |
+									((uint16(ppu.sprite[i*4+entryID])&0xFE + 1) << 4) |
 									(uint16(uint16(ppu.scanline)-uint16(ppu.sprite[i*4+entryY])) & 0x07)
 						}
 					} else {
@@ -672,13 +671,13 @@ func (ppu *PPU) Clock() {
 							spritePatternAddrLo =
 								(uint16(ppu.sprite[i*4+entryID]&0x01) << 12) |
 									((uint16(ppu.sprite[i*4+entryID]&0xFE) + 1) << 4) |
-									(uint16(7-uint16(ppu.scanline)-uint16(ppu.sprite[i*4+entryY])) & 0x07)
+									((7 - uint16(ppu.scanline) - uint16(ppu.sprite[i*4+entryY])) & 0x07)
 						} else {
 							// Bottom half tile
 							spritePatternAddrLo =
 								(uint16(ppu.sprite[i*4+entryID]&0x01) << 12) |
 									(uint16(ppu.sprite[i*4+entryID]&0xFE) << 4) |
-									(uint16(7-uint16(ppu.scanline)-uint16(ppu.sprite[i*4+entryY])) & 0x07)
+									((7 - uint16(ppu.scanline) - uint16(ppu.sprite[i*4+entryY])) & 0x07)
 						}
 					}
 				}
@@ -688,7 +687,7 @@ func (ppu *PPU) Clock() {
 				spritePatternBitsLo = ppu.PPURead(spritePatternAddrLo)
 				spritePatternBitsHi = ppu.PPURead(spritePatternAddrHi)
 
-				if ppu.sprite[i*4+2]&0x40 != 0 {
+				if ppu.sprite[i*4+entryAttribute]&0x40 != 0 {
 					var flipByte func(b uint8) uint8 = func(b uint8) uint8 {
 						b = (b&0xF0)>>4 | (b&0x0F)<<4
 						b = (b&0xCC)>>2 | (b&0x33)<<2
@@ -760,12 +759,12 @@ func (ppu *PPU) Clock() {
 				}
 				var fgPixelHi uint8 = 0
 				if ppu.spriteShifterPatternHi[i]&0x80 > 0 {
-					fgPixelLo = 1
+					fgPixelHi = 1
 				}
 				fgPixel = (fgPixelHi << 1) | fgPixelLo
 
 				fgPalette = (ppu.sprite[i*4+entryAttribute] & 0x03) + 0x04
-				if (ppu.sprite[i*4+entryAttribute] & 0x20) != 0 {
+				if (ppu.sprite[i*4+entryAttribute] & 0x20) == 0 {
 					fgPriority = 1
 				}
 
