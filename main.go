@@ -454,8 +454,8 @@ func (debug *debugger) Update(elapsedTime int64) bool {
 	debug.drawString(2, 466, "P - Change palette", &sdl.Color{R: 0, G: 255, B: 0, A: 0})
 
 	// Swap buffer and present our rendered content.
+	debug.surface, debug.buffer = debug.buffer, debug.surface
 	debug.window.UpdateSurface()
-	debug.buffer.Blit(nil, debug.surface, nil)
 
 	// Clear out buffer for next render round.
 	debug.buffer.FillRect(nil, 0xFF000000)
