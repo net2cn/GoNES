@@ -5,6 +5,7 @@ type Bus struct {
 	CPU        *CPU
 	CPURAM     []uint8
 	PPU        *PPU
+	APU        *APU
 	cartridge  *Cartridge
 	Controller []uint8
 
@@ -18,6 +19,8 @@ type Bus struct {
 	dmaDummy    bool
 
 	systemClockCounter uint32
+
+	AudioSample float64
 }
 
 // NewBus Create a NES main bus with device attached to it.
@@ -34,6 +37,7 @@ func NewBus() *Bus {
 	// Connect CPU to bus
 	bus.CPU = ConnectCPU(&bus)
 	bus.PPU = ConnectPPU(&bus)
+	bus.APU = ConnectAPU(&bus)
 	bus.dmaDummy = false
 	return &bus
 }
@@ -54,6 +58,8 @@ func (bus *Bus) CPURead(addr uint16, readOnly ...bool) uint8 {
 		data = bus.CPURAM[addr&0x07FF] // addr&0x07FF yields back the geniune value after mirroring
 	} else if addr >= 0x2000 && addr <= 0x3FFF {
 		data = bus.PPU.CPURead(addr&0x0007, bReadOnly)
+	} else if (addr >= 0x4000 && addr <= 0x4013) || addr == 0x4015 || addr == 0x4017 {
+		bus.APU.CPURead(addr)
 	} else if addr >= 0x4016 && addr <= 0x4017 {
 		data = 0
 		if (bus.controllerState[addr&0x0001] & 0x80) > 0 {
@@ -73,6 +79,8 @@ func (bus *Bus) CPUWrite(addr uint16, data uint8) {
 		bus.CPURAM[addr&0x07FF] = data // addr&0x07FF yields back the geniune value after mirroring
 	} else if addr >= 0x2000 && addr < 0x3FFF {
 		bus.PPU.CPUWrite(addr&0x0007, data)
+	} else if (addr >= 0x4000 && addr <= 0x4013) || addr == 0x4015 || addr == 0x4017 {
+		bus.APU.CPUWrite(addr, data)
 	} else if addr == 0x4014 {
 		bus.dmaPage = data
 		bus.dmaAddr = 0x00
@@ -99,6 +107,7 @@ func (bus *Bus) Reset() {
 // Clock Clock bus once.
 func (bus *Bus) Clock() {
 	bus.PPU.Clock()
+	bus.APU.Clock()
 
 	if bus.systemClockCounter%3 == 0 {
 		if bus.dmaTransfer {

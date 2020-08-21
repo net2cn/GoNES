@@ -210,6 +210,13 @@ func (debug *debugger) Construct(filePath string, width int32, height int32) err
 		panic(err)
 	}
 
+	// Create renderer
+	debug.renderer, err = sdl.CreateRenderer(debug.window, -1, sdl.RENDERER_ACCELERATED)
+	if err != nil {
+		fmt.Printf("Failed to create renderer: %s\n", err)
+		panic(err)
+	}
+
 	// Create draw surface and draw buffer
 	if debug.surface, err = debug.window.GetSurface(); err != nil {
 		fmt.Printf("Failed to get window surface: %s\n", err)
@@ -218,13 +225,6 @@ func (debug *debugger) Construct(filePath string, width int32, height int32) err
 
 	if debug.buffer, err = debug.surface.Convert(debug.surface.Format, debug.window.GetFlags()); err != nil {
 		fmt.Printf("Failed to create buffer: %s\n", err)
-	}
-
-	// Create renderer
-	debug.renderer, err = sdl.CreateRenderer(debug.window, -1, sdl.RENDERER_ACCELERATED)
-	if err != nil {
-		fmt.Printf("Failed to create renderer: %s\n", err)
-		panic(err)
 	}
 
 	// Init our NES.
