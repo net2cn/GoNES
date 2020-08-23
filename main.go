@@ -1,14 +1,20 @@
 package main
 
+// typedef unsigned char Uint8;
+// void SoundOut(void *userdata, Uint8 *stream, int len);
+import "C"
 import (
 	"flag"
 	"fmt"
 	"log"
+	"math"
 	"os"
+	"reflect"
 	"runtime/pprof"
 	"sort"
 	"strconv"
 	"time"
+	"unsafe"
 
 	"github.com/net2cn/GoNES/nes"
 
@@ -186,9 +192,29 @@ func (debug *debugger) Construct(filePath string, width int32, height int32) err
 
 	// Init sdl2
 	if err = sdl.Init(sdl.INIT_VIDEO); err != nil {
-		fmt.Printf("Failed to init sdl2: %s\n", err)
+		fmt.Printf("Failed to init sdl2 video: %s\n", err)
 		panic(err)
 	}
+
+	if err = sdl.Init(sdl.INIT_AUDIO); err != nil {
+		fmt.Printf("Failed to init sdl2 audio: %s\n", err)
+		panic(err)
+	}
+
+	spec := &sdl.AudioSpec{
+		Freq:     48000,
+		Format:   sdl.AUDIO_U8,
+		Channels: 1,
+		Samples:  48000,
+		Callback: sdl.AudioCallback(C.SoundOut),
+	}
+
+	if err := sdl.OpenAudio(spec, nil); err != nil {
+		fmt.Printf("Failed to open sdl2 audio: %s\n", err)
+		panic(err)
+	}
+
+	sdl.PauseAudio(true)
 
 	// Initialize font
 	if err = ttf.Init(); err != nil {
@@ -260,6 +286,21 @@ func (debug *debugger) Construct(filePath string, width int32, height int32) err
 	debug.inputLock = false
 
 	return nil
+}
+
+//export SoundOut
+func SoundOut(userdata unsafe.Pointer, stream *C.Uint8, length C.int) {
+	n := int(length)
+	hdr := reflect.SliceHeader{Data: uintptr(unsafe.Pointer(stream)), Len: n, Cap: n}
+	buf := *(*[]C.Uint8)(unsafe.Pointer(&hdr))
+
+	var phase float64
+	for i := 0; i < n; i += 2 {
+		phase += 2 * math.Pi * 440 / 48000
+		sample := C.Uint8((math.Sin(phase) + 0.999999) * 128)
+		buf[i] = sample
+		buf[i+1] = sample
+	}
 }
 
 func (debug *debugger) Update(elapsedTime int64) bool {
@@ -350,6 +391,7 @@ func (debug *debugger) Update(elapsedTime int64) bool {
 					debug.bus.PPU.FrameComplete = false
 				case sdl.K_SPACE:
 					debug.emulationRun = !debug.emulationRun
+					sdl.PauseAudio(!debug.emulationRun)
 				case sdl.K_r:
 					debug.bus.CPU.Reset()
 				case sdl.K_p:

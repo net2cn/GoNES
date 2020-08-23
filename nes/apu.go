@@ -2,10 +2,10 @@ package nes
 
 type APU struct {
 	pulse1Enable bool
-	pulse1Sampe  float64
+	pulse1Sampe  float32
 }
 
-func ConnectAPU(bus *Bus) *APU{
+func ConnectAPU(bus *Bus) *APU {
 	apu := APU{}
 
 	return &apu
@@ -44,7 +44,7 @@ func (apu *APU) CPURead(addr uint16) uint8 {
 	return 0x00
 }
 
-func (apu *APU) GetOutputSample() float64 {
+func (apu *APU) GetOutputSample() float32 {
 	return apu.pulse1Sampe
 }
 
