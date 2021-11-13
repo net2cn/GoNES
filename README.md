@@ -36,9 +36,9 @@ Theoretically, you can cross-compile GoNES to OSX with osxcross (and that's inde
 
 ## Usage
 ```
-GoNES -file [NES_ROM_file]
+GoNES [NES_ROM_file]
 ```
 
 Reference: http://wiki.nesdev.com/
 
-2020, net2cn
+2021, net2cn
