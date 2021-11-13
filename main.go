@@ -205,7 +205,7 @@ func (debug *debugger) Construct(filePath string, width int32, height int32) err
 		Freq:     48000,
 		Format:   sdl.AUDIO_U8,
 		Channels: 1,
-		Samples:  48000,
+		Samples:  4096,
 		Callback: sdl.AudioCallback(C.SoundOut),
 	}
 
@@ -534,24 +534,32 @@ func main() {
 	fmt.Println("With programming we have god's hand.")
 
 	// Read flags
-	var file = flag.String("file", "", "NES ROM file")
-	var cpuprofile = flag.String("cpuprofile", "", "Write cpu profile to file")
+	var file *string
+	if len(os.Args) > 2 { // Use flag to parse arguments.
+		var file = flag.String("file", "", "NES ROM file")
+		var cpuprofile = flag.String("cpuprofile", "", "Write cpu profile to file")
 
-	flag.Parse()
+		flag.Parse()
 
-	// Handle flags
-	if *file == "" {
-		fmt.Println("Please specify a NES ROM file.")
-		os.Exit(1)
-	}
-
-	if *cpuprofile != "" {
-		f, err := os.Create(*cpuprofile)
-		if err != nil {
-			log.Fatal(err)
+		// Handle flags
+		if *file == "" {
+			fmt.Println("Please specify a NES ROM file.")
+			os.Exit(1)
 		}
-		pprof.StartCPUProfile(f)
-		defer pprof.StopCPUProfile()
+
+		if *cpuprofile != "" {
+			f, err := os.Create(*cpuprofile)
+			if err != nil {
+				log.Fatal(err)
+			}
+			pprof.StartCPUProfile(f)
+			defer pprof.StopCPUProfile()
+		}
+	} else if len(os.Args) < 2 {
+		fmt.Println("Please specify a NES ROM file. Usage: GoNES.exe [path to NES ROM file].")
+		os.Exit(1)
+	} else { // Drag-n-drop support.
+		file = &os.Args[1]
 	}
 
 	// Construct a debugger instance.
